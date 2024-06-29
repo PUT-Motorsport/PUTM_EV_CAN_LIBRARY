@@ -37,10 +37,10 @@ struct __attribute__((packed)) BMS_LV_temperature {
   uint8_t temp_8;   // in Celsius
 };
 
-const uint16_t BMS_LV_MAIN_CAN_ID = 0xf;
+const uint16_t BMS_LV_MAIN_CAN_ID = 0x55;
 const uint8_t BMS_LV_MAIN_CAN_DLC = sizeof(BMS_LV_main);
 const uint8_t BMS_LV_MAIN_FREQUENCY = 100;
-const uint16_t BMS_LV_TEMPERATURE_CAN_ID = 0x14;
+const uint16_t BMS_LV_TEMPERATURE_CAN_ID = 0x56;
 const uint8_t BMS_LV_TEMPERATURE_CAN_DLC = sizeof(BMS_LV_temperature);
 const uint8_t BMS_LV_TEMPERATURE_FREQUENCY = 1;
 
