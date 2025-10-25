@@ -1,13 +1,8 @@
 syntax = "proto3";
 package putm_can;
 
-// Uwaga: Dla wydajności i minimalizacji narzutu, unikaj pól 'string'
-// i 'repeated' w wiadomościach, które mają się zmieścić w jednej ramce CAN.
-// Preferuj najmniejsze typy całkowite (np. uint32 zamiast uint64).
 
-// Wiadomość 1: PC_TEMPERATURE_CAN_ID = 0x60
-// Często używa się liczb stałoprzecinkowych (przesunięcie / skalowanie), 
-// aby zmieścić wartości zmiennoprzecinkowe w intach.
+// PC_TEMPERATURE_CAN_ID = 0x60
 message PcTemperatureData {
     uint32 rear_right_inverter_temperature = 1; // [°C], skalowanie: 1x
     uint32 rear_left_inverter_temperature = 2;
@@ -16,23 +11,17 @@ message PcTemperatureData {
     // Dalsze pola z PM09_CANBUS_PC.hpp
 }
 
-// Wiadomość 2: PC_MAIN_CAN_ID = 0x10
+//PC_MAIN_CAN_ID = 0x10
 message PcMainData {
     uint32 vehicle_speed = 1;                  // [km/h], skalowanie: 10x
     uint32 torque_current = 2;                 // [A], skalowanie: 10x
-    
-    // Pole boolowskie w Protobuf ma narzut (tag), lepiej grupować bitfields
-    // Jeśli to możliwe, użyjemy go dla prostoty.
     bool inverters_ready = 3;
     bool rtd = 4;
-    
-    // Zgrupowane statusy/błędy inwerterów:
     uint32 inverter_statuses = 5; // Bitfield: 12 bitów dla status/error/warning
 }
 
-// Wiadomość 3: DATA_LOGGER_CAN_ID = 0x57
+//DATA_LOGGER_CAN_ID = 0x57
 message DataLoggerStatus {
-    // 4 bity statusu + msg_cnt + current + voltage
     uint32 status_flags = 1; // 4 bity: current, voltage, logging, ready
     uint32 msg_cnt = 2;
     uint32 current = 3;      // [mA]
