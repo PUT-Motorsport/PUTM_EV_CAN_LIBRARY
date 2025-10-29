@@ -3,12 +3,12 @@ set(LIB_NAME putm_can)
 
 # Set source and include directories for the library
 set(CAN_LIB_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)       # Directory for source files
-set(CAN_LIB_INC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/inc)       # Directory for header files
+set(CAN_LIB_INC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)       # Directory for header files
 set(GENERATED_PROTO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated)  # Directory for generated Protobuf files
 
 # Build options for adapters (passed from the main CMake file)
-# option(BUILD_STM32_ADAPTER "Build STM32 adapter" ON)    # Commented out, as it’s passed from the main file
-# option(BUILD_ROS2_ADAPTER "Build ROS2 adapter" OFF)     # Commented out, as it’s passed from the main file
+#option(BUILD_STM32_ADAPTER "Build STM32 adapter" ON)    # Commented out, as it’s passed from the main file
+#option(BUILD_ROS2_ADAPTER "Build ROS2 adapter" OFF)     # Commented out, as it’s passed from the main file
 
 # Add Protobuf support
 find_package(Protobuf REQUIRED)                            # Check if Protobuf is available
@@ -66,7 +66,13 @@ endif()
 if(BUILD_ROS2_ADAPTER)
     message(STATUS "Building ROS2 adapter")              # Inform user that ROS2 adapter is being built
     find_package(rclcpp REQUIRED)                        # Find rclcpp package for ROS2
+    if(NOT rclcpp_FOUND)
+        message(FATAL_ERROR "rclcpp not found. Please install ROS2 and rclcpp package.")
+    endif()
     find_package(can_msgs REQUIRED)                      # Find can_msgs package for ROS2
+    if(NOT can_msgs_FOUND)
+        message(FATAL_ERROR "can_msgs not found. Please install can_msgs package.")
+    endif()
     add_library(ros2_can
         ${CAN_LIB_SRC_DIR}/ros2_can.cpp                  # Add ROS2 adapter source file
     )
@@ -92,3 +98,10 @@ target_include_directories(${LIB_NAME} INTERFACE
     ${CAN_LIB_INC_DIR}                                    # Export include directory for main project
     ${GENERATED_PROTO_DIR}                                # Export generated Protobuf include directory
 )
+
+# Final build status message
+if(CMAKE_BUILD_TYPE)
+    message(STATUS "Build configuration completed successfully for ${LIB_NAME} with build type ${CMAKE_BUILD_TYPE}")
+else()
+    message(WARNING "Build configuration completed, but no build type specified. Defaulting to Debug.")
+endif()
