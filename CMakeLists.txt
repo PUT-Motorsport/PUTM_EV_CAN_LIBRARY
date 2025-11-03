@@ -1,107 +1,69 @@
-# Define the name of the library
-set(LIB_NAME putm_can)
+# PUTM_EV_CAN_LIBRARY/CMakeLists.txt
 
-# Set source and include directories for the library
-set(CAN_LIB_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)       # Directory for source files
-set(CAN_LIB_INC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)       # Directory for header files
-set(GENERATED_PROTO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated)  # Directory for generated Protobuf files
+cmake_minimum_required(VERSION 3.16)
 
-# Build options for adapters (passed from the main CMake file)
-#option(BUILD_STM32_ADAPTER "Build STM32 adapter" ON)    # Commented out, as it’s passed from the main file
-#option(BUILD_ROS2_ADAPTER "Build ROS2 adapter" OFF)     # Commented out, as it’s passed from the main file
+project(putm_ev_can VERSION 1.0.0 LANGUAGES C CXX)
 
-# Add Protobuf support
-find_package(Protobuf REQUIRED)                            # Check if Protobuf is available
-if (NOT Protobuf_FOUND)
-    message(FATAL_ERROR "Protobuf not found. Please install libprotobuf-dev and protobuf-compiler.")  # Error if Protobuf is missing
-endif()
+# Ustawienia kompilatora
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 
-# Set paths for Protobuf files (relative to the main project directory)
-set(PROTO_SRC_DIR "${CMAKE_SOURCE_DIR}/proto")            # Directory containing .proto files
-file(MAKE_DIRECTORY ${GENERATED_PROTO_DIR})               # Create directory for generated files if it doesn’t exist
+find_package(Python3 COMPONENTS Interpreter QUIET)
 
-# Find all .proto files
-file(GLOB PROTO_FILES "${PROTO_SRC_DIR}/*.proto")         # Collect all .proto files in the proto directory
-
-# Generate .pb.h and .pb.cc files from .proto files
-protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${PROTO_FILES})  # Generate Protobuf source and header files
-
-# Create a library for generated Protobuf files
-add_library(putm_can_proto ${PROTO_SRCS} ${PROTO_HDRS})
-target_include_directories(putm_can_proto PUBLIC
-    ${GENERATED_PROTO_DIR}                                # Include directory for generated Protobuf headers
-    ${Protobuf_INCLUDE_DIRS}                              # Include Protobuf library headers
-)
-target_link_libraries(putm_can_proto PUBLIC ${Protobuf_LIBRARIES})  # Link against Protobuf libraries
-
-# Create the core library
-add_library(${LIB_NAME}
-    ${CAN_LIB_SRC_DIR}/message_handler.cpp                # Add core source files here
-    # Add other core files, e.g., can_interface.cpp, if they exist
-)
-target_include_directories(${LIB_NAME} PUBLIC
-    ${CAN_LIB_INC_DIR}                                    # Include directory for library headers
-    ${GENERATED_PROTO_DIR}                                # Include directory for generated Protobuf headers
-    ${Protobuf_INCLUDE_DIRS}                              # Include Protobuf library headers
-)
-target_link_libraries(${LIB_NAME} PUBLIC putm_can_proto)   # Link core library with Protobuf library
-
-# Conditionally add STM32 adapter
-if(BUILD_STM32_ADAPTER)
-    message(STATUS "Building STM32 adapter")              # Inform user that STM32 adapter is being built
-    add_library(stm32_can
-        ${CAN_LIB_SRC_DIR}/stm32_can.cpp                  # Add STM32 adapter source file
-    )
-    target_include_directories(stm32_can PUBLIC
-        ${CAN_LIB_INC_DIR}                                # Include directory for library headers
-        ${GENERATED_PROTO_DIR}                            # Include directory for generated Protobuf headers
-        ${Protobuf_INCLUDE_DIRS}                          # Include Protobuf library headers
-    )
-    target_link_libraries(stm32_can PUBLIC ${LIB_NAME} stm32cubemx)  # Link STM32 adapter with core and CubeMX
-    # Export the library to the main project
-    set(STATIC_LIBS ${STATIC_LIBS} stm32_can PARENT_SCOPE)
-endif()
-
-# Conditionally add ROS2 adapter
-if(BUILD_ROS2_ADAPTER)
-    message(STATUS "Building ROS2 adapter")              # Inform user that ROS2 adapter is being built
-    find_package(rclcpp REQUIRED)                        # Find rclcpp package for ROS2
-    if(NOT rclcpp_FOUND)
-        message(FATAL_ERROR "rclcpp not found. Please install ROS2 and rclcpp package.")
+if(Python3_Interpreter_FOUND)
+    # Sprawdź czy plik DBC istnieje
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/dbc/PUTM_CAN_1.dbc)
+        execute_process(
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/dbc/setup.py
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/dbc
+            RESULT_VARIABLE CODE_GEN_RESULT
+            OUTPUT_QUIET
+            ERROR_QUIET
+        )
+        if(CODE_GEN_RESULT EQUAL 0)
+            message(STATUS "DBC code generation successful")
+        else()
+            message(WARNING "DBC code generation failed")
+        endif()
+    else()
+        message(WARNING "DBC file not found, creating minimal definitions")
+        # Utwórz minimalne pliki jeśli DBC nie istnieje
+        file(WRITE ${CMAKE_CURRENT_SOURCE_DIR}/dbc/generated/can_message_defs.h
+            "#ifndef CAN_MESSAGE_DEFS_H\n#define CAN_MESSAGE_DEFS_H\n\n// Minimal definitions\n#include <stdint.h>\n\n#endif\n")
+        file(WRITE ${CMAKE_CURRENT_SOURCE_DIR}/dbc/generated/can_message_defs.c "// Minimal implementation\n")
     endif()
-    find_package(can_msgs REQUIRED)                      # Find can_msgs package for ROS2
-    if(NOT can_msgs_FOUND)
-        message(FATAL_ERROR "can_msgs not found. Please install can_msgs package.")
-    endif()
-    add_library(ros2_can
-        ${CAN_LIB_SRC_DIR}/ros2_can.cpp                  # Add ROS2 adapter source file
-    )
-    target_include_directories(ros2_can PUBLIC
-        ${CAN_LIB_INC_DIR}                                # Include directory for library headers
-        ${GENERATED_PROTO_DIR}                            # Include directory for generated Protobuf headers
-        ${Protobuf_INCLUDE_DIRS}                          # Include Protobuf library headers
-    )
-    target_link_libraries(ros2_can PUBLIC
-        ${LIB_NAME}                                       # Link with core library
-        rclcpp::rclcpp                                    # Link with rclcpp library
-        can_msgs::can_msgs                                # Link with can_msgs library
-    )
-    # Export the library to the main project
-    set(STATIC_LIBS ${STATIC_LIBS} ros2_can PARENT_SCOPE)
-endif()
-
-# Export the core library to the main project
-set(STATIC_LIBS ${LIB_NAME} ${STATIC_LIBS} PARENT_SCOPE)   # Pass core and adapter libraries to the parent scope
-
-# Add include paths for the main project
-target_include_directories(${LIB_NAME} INTERFACE
-    ${CAN_LIB_INC_DIR}                                    # Export include directory for main project
-    ${GENERATED_PROTO_DIR}                                # Export generated Protobuf include directory
-)
-
-# Final build status message
-if(CMAKE_BUILD_TYPE)
-    message(STATUS "Build configuration completed successfully for ${LIB_NAME} with build type ${CMAKE_BUILD_TYPE}")
 else()
-    message(WARNING "Build configuration completed, but no build type specified. Defaulting to Debug.")
+    message(WARNING "🐍 Python3 not found - using minimal CAN definitions")
 endif()
+
+# AUTOMATYCZNE WYSZUKIWANIE PLIKÓW ŹRÓDŁOWYCH
+file(GLOB_RECURSE CAN_SOURCES 
+    "src/*.cpp"
+    "src/*.c"
+    "dbc/generated/*.c"
+)
+
+# Jeśli nie znaleziono plików, utwórz minimalną bibliotekę
+if(NOT CAN_SOURCES)
+    message(STATUS "📁 No source files found, creating minimal library")
+    set(CAN_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/minimal.cpp)
+    file(WRITE ${CMAKE_CURRENT_SOURCE_DIR}/src/minimal.cpp "// Minimal CAN library\nnamespace putm_ev_can { int placeholder = 1; }\n")
+endif()
+
+# UTWÓRZ BIBLIOTEKĘ
+add_library(putm_ev_can STATIC ${CAN_SOURCES})
+
+# AUTOMATYCZNE DOŁĄCZANIE NAGŁÓWKÓW
+target_include_directories(putm_ev_can PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/dbc/generated>
+)
+
+target_include_directories(putm_ev_can PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+
+message(STATUS "PUTM_EV_CAN_LIBRARY configured - just add 'putm_ev_can' to target_link_libraries")

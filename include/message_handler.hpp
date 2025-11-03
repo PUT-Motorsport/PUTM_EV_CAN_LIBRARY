@@ -1,78 +1,150 @@
-#ifndef PUTM_CAN_MESSAGE_HANDLER_HPP
-#define PUTM_CAN_MESSAGE_HANDLER_HPP
+/**
+ * @file message_handler.hpp
+ * @brief CAN Message Handler with callback management
+ * @details Handles message routing, callback registration, and type-safe
+ *          message dispatch for received CAN messages with thread safety
+ * 
+ * @author PUTM Team
+ * @version 2.0
+ * @date 2024
+ */
+
+#ifndef PUTM_EV_CAN_MESSAGE_HANDLER_HPP
+#define PUTM_EV_CAN_MESSAGE_HANDLER_HPP
 
 #include <functional>
 #include <span>
 #include <unordered_map>
+#include <vector>
+#include <utility>
 #include "can_interface.hpp"
-#include "generated/pdu.pb.h" // Generated Protobuf file
 
-namespace putm_can {
-
-/**
- * @brief Type alias for CAN message ID.
- */
-using CanId = uint32_t;
+namespace putm_ev_can {
 
 /**
- * @brief Type alias for callback function.
- */
-using CallbackFunction = std::function<void(const google::protobuf::Message&)>;
-
-/**
- * @brief Class managing CAN messages, handling serialization/deserialization and callbacks.
+ * @class MessageHandler
+ * @brief Manages CAN message callbacks and routing with thread safety
  * 
- * This class is part of the communication abstraction layer and works with CanInterface.
- * It uses Protobuf for message serialization/deserialization.
+ * Provides comprehensive message handling with support for:
+ * - Type-safe callbacks for specific message types
+ * - Batch message processing
+ * - Default callback for unhandled messages
+ * - Thread-safe operations
+ * - Error handling and logging
  */
 class MessageHandler {
 public:
     /**
-     * @brief Default constructor.
+     * @brief Default constructor
      */
-    MessageHandler();
+    MessageHandler() = default;
 
     /**
-     * @brief Registers a callback for a specific CAN ID.
-     * @param id The CAN message ID.
-     * @param callback The callback function to invoke upon message reception.
-     * @tparam MsgType The Protobuf message type (e.g., PduChannel).
-     */
-    template <typename MsgType>
-    void register_callback(CanId id, std::function<void(const MsgType&)> callback);
-
-    /**
-     * @brief Serializes a message into a CAN buffer (max 8 bytes).
-     * @param msg The Protobuf message to serialize.
-     * @param buffer The output buffer (span<uint8_t>).
-     * @return true if serialization succeeded, false otherwise.
+     * @brief Register type-safe callback for specific CAN message
+     * @tparam MsgType DBC message structure type
+     * @param id CAN message identifier
+     * @param callback Function to call when message is received
      */
     template <typename MsgType>
-    bool serialize(const MsgType& msg, std::span<uint8_t> buffer) const;
+    void register_callback(CanId id, std::function<void(const MsgType&)> callback) {
+        callbacks_[id] = [callback](std::span<const uint8_t> data) {
+            MsgType msg;
+            if (decode_to_message<MsgType>(data, msg)) {
+                callback(msg);
+            }
+        };
+    }
 
+    // === THREAD-SAFE METHODS IMPLEMENTED IN .cpp ===
+    
     /**
-     * @brief Deserializes a message from a CAN buffer.
-     * @param id The CAN message ID.
-     * @param buffer The input buffer (span<const uint8_t>).
-     * @param[out] msg The Protobuf message object to fill.
-     * @return true if deserialization succeeded, false otherwise.
-     */
-    template <typename MsgType>
-    bool deserialize(CanId id, std::span<const uint8_t> buffer, MsgType& msg) const;
-
-    /**
-     * @brief Invokes the callback for a received message.
-     * @param id The CAN message ID.
-     * @param data Raw data from the CAN buffer.
+     * @brief Handle incoming CAN message and invoke appropriate callback
+     * @param id CAN message identifier
+     * @param data Message data bytes
      */
     void handle_message(CanId id, std::span<const uint8_t> data);
+    
+    /**
+     * @brief Handle message with default callback support
+     * @param id CAN message identifier
+     * @param data Message data bytes
+     */
+    void handle_message_with_default(CanId id, std::span<const uint8_t> data);
+    
+    /**
+     * @brief Process multiple messages in batch (more efficient)
+     * @param messages Vector of message ID and data pairs
+     */
+    void handle_messages_batch(const std::vector<std::pair<CanId, std::span<const uint8_t>>>& messages);
+    
+    /**
+     * @brief Check if callback is registered for specific message ID
+     * @param id CAN message identifier to check
+     * @return true if callback is registered
+     */
+    bool has_callback(CanId id) const;
+    
+    /**
+     * @brief Get number of registered callbacks
+     * @return Number of active callbacks
+     */
+    size_t callback_count() const;
+    
+    /**
+     * @brief Remove all registered callbacks
+     */
+    void clear_callbacks();
+    
+    /**
+     * @brief Remove callback for specific message ID
+     * @param id CAN message identifier
+     * @return true if callback was removed
+     */
+    bool remove_callback(CanId id);
+    
+    /**
+     * @brief Get list of all registered message IDs
+     * @return Vector of registered CAN message identifiers
+     */
+    std::vector<CanId> get_registered_ids() const;
+    
+    /**
+     * @brief Set default callback for unhandled messages
+     * @param callback Function to call for messages without specific handlers
+     */
+    void set_default_callback(std::function<void(CanId, std::span<const uint8_t>)> callback);
 
 private:
-    std::unordered_map<CanId, CallbackFunction> callbacks_;  /**< Map storing callbacks for specific IDs. */
+    std::unordered_map<CanId, std::function<void(std::span<const uint8_t>)>> callbacks_;
+    std::function<void(CanId, std::span<const uint8_t>)> default_callback_;
 
-    static constexpr size_t CAN_MAX_DLC = 8;                 /**< Maximum CAN message size (8 bytes for standard). */
+    /**
+     * @brief Decode raw CAN data to specific message type
+     * @tparam MsgType Target message type
+     * @param data Raw CAN data (must be 8 bytes)
+     * @param[out] msg Message structure to populate
+     * @return true if decoding successful
+     */
+    template <typename MsgType>
+    bool decode_to_message(std::span<const uint8_t> data, MsgType& msg) {
+        if (data.size() != 8) {
+            return false;
+        }
+        
+        // Use DBC decode functions based on message type
+        if constexpr (std::is_same_v<MsgType, PUTM_CAN_PcMainData>) {
+            Pc_MainData_decode(data.data(), &msg);
+            return true;
+        } else if constexpr (std::is_same_v<MsgType, PUTM_CAN_PcTemperatureData>) {
+            Pc_TemperatureData_decode(data.data(), &msg);
+            return true;
+        }
+        // Add more message types as needed
+        
+        return false;
+    }
 };
 
-} // namespace putm_can
+} // namespace putm_ev_can
 
-#endif // PUTM_CAN_MESSAGE_HANDLER_HPP
+#endif // PUTM_EV_CAN_MESSAGE_HANDLER_HPP

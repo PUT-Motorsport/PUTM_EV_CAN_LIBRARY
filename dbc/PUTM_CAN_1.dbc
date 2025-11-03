@@ -1,0 +1,138 @@
+VERSION "1.2"
+
+NS_ :
+BS_: 
+BU_: REARBOX PC PDU FRONTBOX DASHBOARD BMS_LV BMS_HV
+
+
+BO_ 37 Rearbox_Safety: 2 REARBOX
+ SG_ safety_tsmp : 0|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ safety_rfu : 1|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ safety_hv_battery : 2|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ safety_inv_hv : 3|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ safety_hvd : 4|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ safety_inv : 5|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ safety_wheel_fl : 6|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ safety_wheel_fr : 7|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ safety_wheel_rl : 8|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ safety_wheel_rr : 9|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ safety_suspension_rl : 10|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ safety_suspension_rr : 11|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ safety_motor_front : 12|1@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 38 Rearbox_Temperature: 5 REARBOX
+ SG_ mono_temperature : 0|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ coolant_temperature_in : 8|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ coolant_temperature_out : 16|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ oil_temperature_l : 24|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ oil_temperature_r : 32|8@1+ (1,0) [0|255] "" Vector__XXX
+
+BO_ 39 Rearbox_Miscellaneous: 6 REARBOX
+ SG_ coolant_pressure_in : 0|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ coolant_pressure_out : 8|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ suspension_l : 16|16@1+ (1,0) [0|65535] "" Vector__XXX
+ SG_ suspension_r : 32|16@1+ (1,0) [0|65535] "" Vector__XXX
+
+BO_ 96 Pc_TemperatureData: 8 PC
+ SG_ rearRightInverterTemperature : 0|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ rearLeftInverterTemperature : 8|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ rearRightMotorTemperature : 16|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ rearLeftMotorTemperature : 24|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ frontRightInverterTemperature : 32|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ frontLeftInverterTemperature : 40|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ frontRightMotorTemperature : 48|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ frontLeftMotorTemperature : 56|8@1+ (1,0) [0|255] "" Vector__XXX
+
+BO_ 16 Pc_MainData: 6 PC
+ SG_ vehicleSpeed : 0|16@1+ (1,0) [0|65535] "" Vector__XXX
+ SG_ torque_current : 16|16@1+ (1,0) [0|65535] "" Vector__XXX
+ SG_ invertersReady : 32|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ rtd : 33|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ inv_FL_status : 34|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ inv_FR_status : 35|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ inv_RL_status : 36|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ inv_RR_status : 37|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ inv_FL_error : 38|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ inv_FR_error : 39|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ inv_RL_error : 40|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ inv_RR_error : 41|1@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 17 Pc_LapTimerData: 7 PC
+ SG_ currentLapTime : 0|16@1+ (1,0) [0|65535] "" Vector__XXX
+ SG_ bestLapTime : 16|16@1+ (1,0) [0|65535] "" Vector__XXX
+ SG_ delta_time : 32|16@1- (1,0) [-32768|32767] "" Vector__XXX
+ SG_ lap_counter : 48|8@1+ (1,0) [0|255] "" Vector__XXX
+
+BO_ 48 Pdu_Channnel: 4 PDU
+ SG_ pc_status : 0|2@1+ (1,0) [0|3] "" Vector__XXX
+ SG_ fan_status : 2|2@1+ (1,0) [0|3] "" Vector__XXX
+ SG_ pump_status : 4|2@1+ (1,0) [0|3] "" Vector__XXX
+ SG_ inverter_status : 6|2@1+ (1,0) [0|3] "" Vector__XXX
+ SG_ fbox_status : 8|2@1+ (1,0) [0|3] "" Vector__XXX
+ SG_ sdc_status : 10|2@1+ (1,0) [0|3] "" Vector__XXX
+ SG_ dash_status : 12|2@1+ (1,0) [0|3] "" Vector__XXX
+ SG_ tsal_hv_status : 14|2@1+ (1,0) [0|3] "" Vector__XXX
+ SG_ rbox_diagport_brake_l_status : 16|2@1+ (1,0) [0|3] "" Vector__XXX
+ SG_ brake_ir_air_status : 18|2@1+ (1,0) [0|3] "" Vector__XXX
+
+BO_ 49 Pdu_Data: 8 PDU
+ SG_ pc_current : 0|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ pump_current : 8|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ fan_current : 16|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ inverter_current : 24|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ fbox_current : 32|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ sdc_current : 40|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ total_current : 48|16@1+ (1,0) [0|65535] "" Vector__XXX
+
+BO_ 5 DriverInput: 8 FRONTBOX
+ SG_ pedalPosition : 0|16@1+ (1,0) [0|65535] "" Vector__XXX
+ SG_ brakePressureFront : 16|16@1+ (1,0) [0|65535] "" Vector__XXX
+ SG_ brakePressureRear : 32|16@1+ (1,0) [0|65535] "" Vector__XXX
+ SG_ steeringWheelPosition : 48|16@1+ (1,0) [0|65535] "" Vector__XXX
+
+BO_ 53 Front_Data: 7 FRONTBOX
+ SG_ sense_left_kill : 0|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ sense_right_kill : 1|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ sense_driver_kill : 2|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ sense_inertia : 3|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ sense_bspd : 4|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ sense_overtravel : 5|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ safety_suspension_fl : 6|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ safety_suspension_fr : 7|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ is_braking : 8|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ apps : 9|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ apps_implausibility : 10|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ frontLeftSuspension : 18|16@1+ (1,0) [0|65535] "" Vector__XXX
+ SG_ frontRightSuspension : 34|16@1+ (1,0) [0|65535] "" Vector__XXX
+
+BO_ 21 Dashboard: 1 DASHBOARD
+ SG_ ready_to_drive_button : 0|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ ts_activation_button : 1|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ user_button : 2|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ drs_button : 3|1@1+ (1,0) [0|1] "" Vector__XXX
+
+BO_ 85 Bms_LV_main: 6 BMS_LV
+ SG_ voltage_sum : 0|16@1+ (1,0) [0|65535] "" Vector__XXX
+ SG_ soc : 16|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ temp_avg : 24|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ current : 32|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ device_state : 40|8@1+ (1,0) [0|255] "" Vector__XXX
+
+BO_ 86 Bms_LV_temperature: 8 BMS_LV
+ SG_ temp_1 : 0|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ temp_2 : 8|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ temp_3 : 16|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ temp_4 : 24|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ temp_5 : 32|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ temp_6 : 40|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ temp_7 : 48|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ temp_8 : 56|8@1+ (1,0) [0|255] "" Vector__XXX
+
+BO_ 69 Bms_HV_main: 8 BMS_HV
+ SG_ voltage_sum : 0|16@1+ (1,0) [0|65535] "" Vector__XXX
+ SG_ current : 16|16@1- (1,0) [-32768|32767] "" Vector__XXX
+ SG_ temp_max : 32|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ temp_avg : 40|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ soc : 48|10@1+ (1,0) [0|1023] "" Vector__XXX
+ SG_ ok : 58|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ precharge : 59|1@1+ (1,0) [0|1] "" Vector__XXX
