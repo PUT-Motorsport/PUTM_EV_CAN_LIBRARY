@@ -19,6 +19,9 @@
 
 namespace putm_ev_can {
 
+/// CAN message identifier type
+using CanId = uint32_t;
+
 /**
  * @typedef CanId
  * @brief CAN message identifier (11-bit or 29-bit)
