@@ -1,92 +1,75 @@
+/**
+ * @file can_interface.hpp
+ * @brief High-level CAN interface using DBC-generated structures.
+ *
+ * Provides templated send/receive with automatic pack/unpack from cantools.
+ */
+
 #ifndef PUTM_CAN_INTERFACE_HPP
 #define PUTM_CAN_INTERFACE_HPP
 
 #include <cstdint>
 #include <functional>
-#include <span>  // C++20 for buffers
-#include "generated/can_ids.pb.h"  // Enum from proto
+#include <span>
+#include <array>
 
 namespace putm_can {
 
+/// CAN message identifier type
+using CanId = uint32_t;
+
 /**
- * @brief Abstract base class for CAN interface.
- * 
- * Defines the basic operations for sending and receiving CAN messages using Protobuf templates.
+ * @brief Abstract base class for CAN communication.
+ *
+ * Uses cantools-generated structures for message packing/unpacking.
  */
 class CanInterface {
 public:
-    virtual ~CanInterface() = default;  /**< Virtual destructor for proper cleanup. */
+    /// Virtual destructor
+    virtual ~CanInterface() = default;
 
     /**
-     * @brief Sends a CAN message with automatic Protobuf serialization.
-     * 
-     * Serializes the Protobuf message into a CAN frame and transmits it.
-     * @tparam MsgType The Protobuf message type (e.g., PcMainData).
-     * @param id The CAN message ID.
-     * @param msg Reference to the Protobuf message to send.
-     * @return true if the send operation succeeded, false otherwise.
+     * @brief Sends a CAN message using DBC-generated pack function.
+     *
+     * @tparam MsgType DBC-generated message structure (e.g., bms_hv_main_t)
+     * @param id CAN frame ID
+     * @param msg Message to send
+     * @return true on success, false on packing/transmit error
      */
     template <typename MsgType>
     bool send(CanId id, const MsgType& msg) {
-        uint8_t buffer[8];
-        std::span<uint8_t> buf_span(buffer);
-        if (!serialize(msg, buf_span)) return false;
-        return send_raw(id, buf_span);
+        std::array<uint8_t, 8> buffer{};
+        int len = MsgType##_pack(buffer.data(), &msg, buffer.size());
+        if (len < 0) return false;
+        return send_raw(id, std::span(buffer.data(), static_cast<size_t>(len)));
     }
 
     /**
-     * @brief Registers a callback for received messages.
-     * 
-     * Sets up a callback function to be invoked when a message with the specified ID is received.
-     * @tparam MsgType The Protobuf message type.
-     * @param id The CAN message ID.
-     * @param cb Callback function to handle the deserialized message.
+     * @brief Registers a callback for a specific CAN ID.
+     *
+     * @tparam MsgType DBC-generated message type
+     * @param id CAN ID to listen on
+     * @param cb Callback function receiving unpacked message
      */
     template <typename MsgType>
     void register_callback(CanId id, std::function<void(const MsgType&)> cb) {
         register_raw_callback(id, [cb](std::span<const uint8_t> data) {
-            MsgType msg;
-            if (deserialize(data, msg)) cb(msg);
+            MsgType msg{};
+            if (MsgType##_unpack(&msg, data.data(), data.size()) == 0) {
+                cb(msg);
+            }
         });
     }
 
 protected:
-    /**
-     * @brief Sends a raw CAN frame (to be implemented by derived classes).
-     * @param id The CAN message ID.
-     * @param data Raw data span to send.
-     * @return true if the send operation succeeded, false otherwise.
-     */
+    /// Send raw CAN frame (implemented by adapter)
     virtual bool send_raw(CanId id, std::span<const uint8_t> data) = 0;
 
-    /**
-     * @brief Registers a raw callback for received data.
-     * @param id The CAN message ID.
-     * @param cb Callback function for raw data.
-     */
-    virtual void register_raw_callback(CanId id, std::function<void(std::span<const uint8_t>)> cb) = 0;
-
-    /**
-     * @brief Serializes a Protobuf message into a buffer.
-     * @tparam MsgType The Protobuf message type.
-     * @param msg The message to serialize.
-     * @param buffer The output buffer.
-     * @return true if serialization succeeded, false otherwise.
-     */
-    template <typename MsgType>
-    static bool serialize(const MsgType& msg, std::span<uint8_t> buffer);
-
-    /**
-     * @brief Deserializes a Protobuf message from a buffer.
-     * @tparam MsgType The Protobuf message type.
-     * @param data The input raw data.
-     * @param[out] msg The message object to fill.
-     * @return true if deserialization succeeded, false otherwise.
-     */
-    template <typename MsgType>
-    static bool deserialize(std::span<const uint8_t> data, MsgType& msg);
+    /// Register raw data callback (implemented by adapter)
+    virtual void register_raw_callback(CanId id,
+        std::function<void(std::span<const uint8_t>)> cb) = 0;
 };
 
-}  // namespace putm_can
+} // namespace putm_can
 
-#endif
+#endif // PUTM_CAN_INTERFACE_HPP

@@ -1,76 +1,61 @@
+/**
+ * @file message_handler.hpp
+ * @brief Manages CAN message callbacks with DBC-generated types.
+ */
+
 #ifndef PUTM_CAN_MESSAGE_HANDLER_HPP
 #define PUTM_CAN_MESSAGE_HANDLER_HPP
 
 #include <functional>
 #include <span>
 #include <unordered_map>
-#include "can_interface.hpp"
-#include "generated/pdu.pb.h" // Generated Protobuf file
 
 namespace putm_can {
 
-/**
- * @brief Type alias for CAN message ID.
- */
 using CanId = uint32_t;
 
 /**
- * @brief Type alias for callback function.
- */
-using CallbackFunction = std::function<void(const google::protobuf::Message&)>;
-
-/**
- * @brief Class managing CAN messages, handling serialization/deserialization and callbacks.
- * 
- * This class is part of the communication abstraction layer and works with CanInterface.
- * It uses Protobuf for message serialization/deserialization.
+ * @brief Central message dispatcher.
+ *
+ * Stores callbacks per CAN ID and invokes them with unpacked messages.
  */
 class MessageHandler {
 public:
-    /**
-     * @brief Default constructor.
-     */
-    MessageHandler();
+    /// Default constructor
+    MessageHandler() = default;
 
     /**
-     * @brief Registers a callback for a specific CAN ID.
-     * @param id The CAN message ID.
-     * @param callback The callback function to invoke upon message reception.
-     * @tparam MsgType The Protobuf message type (e.g., PduChannel).
+     * @brief Registers a callback for a CAN ID.
+     *
+     * @tparam MsgType DBC-generated message type
+     * @param id CAN message ID
+     * @param callback Function to call with unpacked message
      */
     template <typename MsgType>
-    void register_callback(CanId id, std::function<void(const MsgType&)> callback);
+    void register_callback(CanId id, std::function<void(const MsgType&)> callback) {
+        callbacks_[id] = [callback](std::span<const uint8_t> data) {
+            MsgType msg{};
+            if (MsgType##_unpack(&msg, data.data(), data.size()) == 0) {
+                callback(msg);
+            }
+        };
+    }
 
     /**
-     * @brief Serializes a message into a CAN buffer (max 8 bytes).
-     * @param msg The Protobuf message to serialize.
-     * @param buffer The output buffer (span<uint8_t>).
-     * @return true if serialization succeeded, false otherwise.
+     * @brief Dispatches received raw data to registered callback.
+     * @param id CAN ID
+     * @param data Raw payload
      */
-    template <typename MsgType>
-    bool serialize(const MsgType& msg, std::span<uint8_t> buffer) const;
-
-    /**
-     * @brief Deserializes a message from a CAN buffer.
-     * @param id The CAN message ID.
-     * @param buffer The input buffer (span<const uint8_t>).
-     * @param[out] msg The Protobuf message object to fill.
-     * @return true if deserialization succeeded, false otherwise.
-     */
-    template <typename MsgType>
-    bool deserialize(CanId id, std::span<const uint8_t> buffer, MsgType& msg) const;
-
-    /**
-     * @brief Invokes the callback for a received message.
-     * @param id The CAN message ID.
-     * @param data Raw data from the CAN buffer.
-     */
-    void handle_message(CanId id, std::span<const uint8_t> data);
+    void handle_message(CanId id, std::span<const uint8_t> data) {
+        auto it = callbacks_.find(id);
+        if (it != callbacks_.end()) {
+            it->second(data);
+        }
+    }
 
 private:
-    std::unordered_map<CanId, CallbackFunction> callbacks_;  /**< Map storing callbacks for specific IDs. */
-
-    static constexpr size_t CAN_MAX_DLC = 8;                 /**< Maximum CAN message size (8 bytes for standard). */
+    /// Map of CAN ID → raw data callback
+    std::unordered_map<CanId, std::function<void(std::span<const uint8_t>)>> callbacks_;
 };
 
 } // namespace putm_can

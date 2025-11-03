@@ -1,54 +1,64 @@
-#ifndef CAN_HAL_HPP
-#define CAN_HAL_HPP
+/**
+ * @file can_hal.cpp
+ * @brief Optional default implementation of ICanHal for simulation.
+ *
+ * This file provides a stub implementation of ICanHal that can be used
+ * for unit testing or simulation without hardware. It does not transmit
+ * or receive real CAN frames.
+ *
+ * @note This is a simulation-only HAL. For real hardware, use Stm32CanHal
+ *       or Ros2CanHal.
+ */
 
-#include <cstdint>
-#include <array>
+#include "can_hal.hpp"
+#include <cstring>
 
 namespace PUTM_CAN {
 
 /**
- * @brief Structure representing a CAN frame.
- * 
- * Contains the ID, data length code (DLC), and a fixed-size data buffer of 8 bytes.
+ * @brief Default simulation HAL.
+ *
+ * Always reports success for transmit, never has data to receive.
  */
-struct CanFrame {
-    uint32_t id;                        /**< CAN message ID (11-bit or 29-bit). */
-    uint8_t dlc;                        /**< Data length code (0-8 bytes). */
-    std::array<uint8_t, 8> data = {};   /**< Data buffer for the CAN frame. */
+class DefaultCanHal : public ICanHal {
+public:
+    /**
+     * @brief Initialize simulation HAL.
+     * @return Always true
+     */
+    bool init() override {
+        return true;
+    }
+
+    /**
+     * @brief Simulate transmission.
+     * @param frame Frame to "send"
+     * @return Always true (simulated success)
+     */
+    bool transmit(const CanFrame& frame) override {
+        (void)frame;  // Suppress unused warning
+        return true;
+    }
+
+    /**
+     * @brief Simulate reception.
+     * @param[out] frame Frame to fill
+     * @return Always false (no data)
+     */
+    bool receive(CanFrame& frame) override {
+        std::memset(&frame, 0, sizeof(frame));
+        return false;
+    }
 };
 
 /**
- * @brief Pure virtual interface for CAN hardware abstraction.
- * 
- * Defines the basic operations for CAN interface, to be implemented by derived classes.
+ * @brief Factory function to create default HAL.
+ * @return Pointer to simulation HAL
+ *
+ * @warning Caller must manage lifetime (delete when done).
  */
-class ICanHal {
-public:
-    virtual ~ICanHal() = default;       /**< Virtual destructor for proper cleanup. */
-
-    /**
-     * @brief Initializes the CAN interface.
-     * @return true if initialization succeeded, false otherwise.
-     */
-    virtual bool init() = 0;
-
-    /**
-     * @brief Transmits a CAN frame.
-     * @param frame The CAN frame to send.
-     * @return true if transmission succeeded, false otherwise.
-     */
-    virtual bool transmit(const CanFrame& frame) = 0;
-
-    /**
-     * @brief Receives a CAN frame (non-blocking).
-     * 
-     * Returns true if a new message was received, false otherwise.
-     * @param frame Reference to the CAN frame to fill.
-     * @return true if a message was received, false otherwise.
-     */
-    virtual bool receive(CanFrame& frame) = 0;
-};
+ICanHal* create_default_hal() {
+    return new DefaultCanHal();
+}
 
 } // namespace PUTM_CAN
-
-#endif

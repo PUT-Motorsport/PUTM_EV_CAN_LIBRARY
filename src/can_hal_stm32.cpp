@@ -10,7 +10,65 @@ namespace PUTM_CAN {
  * Uses FDCAN_HandleTypeDef for communication with STM32 hardware.
  * @note The implementation includes simulation; full integration with HAL is required.
  */
+class Stm32CanHal : public ICanHal {/**
+ * @file can_hal_stm32.cpp
+ * @brief STM32 FDCAN implementation of ICanHal.
+ *
+ * Uses STM32 HAL FDCAN driver. Simulation mode included.
+ */
+
+#include "can_hal.hpp"
+#include "main.h"
+
+namespace PUTM_CAN {
+
+/**
+ * @brief STM32-specific CAN HAL using FDCAN.
+ */
 class Stm32CanHal : public ICanHal {
+private:
+    FDCAN_HandleTypeDef* hfdcan;   ///< FDCAN handle from CubeMX
+
+public:
+    /**
+     * @brief Constructor.
+     * @param h Pointer to FDCAN handle
+     */
+    explicit Stm32CanHal(FDCAN_HandleTypeDef* h) : hfdcan(h) {}
+
+    /** @brief Initialize FDCAN (simulation) */
+    bool init() override {
+        // HAL_FDCAN_Start(hfdcan);
+        return true;
+    }
+
+    /** @brief Transmit frame */
+    bool transmit(const CanFrame& f) override {
+        FDCAN_TxHeaderTypeDef hdr = {
+            .Identifier = f.id,
+            .IdType = (f.id <= 0x7FF) ? FDCAN_STANDARD_ID : FDCAN_EXTENDED_ID,
+            .TxFrameType = FDCAN_DATA_FRAME,
+            .DataLength = static_cast<uint32_t>(f.dlc) << 16,
+            .FDFormat = FDCAN_CLASSIC_CAN
+        };
+//        return HAL_FDCAN_AddMessageToTxFifoQ(hfdcan, &hdr, f.data.data()) == HAL_OK;
+        return true; // simulation
+    }
+
+    /** @brief Receive frame (simulated) */
+    bool receive(CanFrame& f) override {
+        static int counter = 0;
+        if (counter++ < 3) {
+            f.id = 0x45;
+            f.dlc = 8;
+            f.data[0] = static_cast<uint8_t>(100 + counter);
+            return true;
+        }
+        return false;
+    }
+};
+
+} // namespace PUTM_CAN
 private:
     FDCAN_HandleTypeDef* hcan;          /**< Pointer to the FDCAN configuration structure. */
 
