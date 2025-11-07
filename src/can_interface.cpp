@@ -1,53 +1,70 @@
 /**
  * @file can_interface.cpp
- * @brief Implementation of high-level CAN interface using DBC-generated code.
+ * @brief Default high-level CAN interface using HAL + MessageHandler.
  */
 
 #include "can_interface.hpp"
+#include "message_handler.hpp"
 #include "can_hal.hpp"
-#include "generated/putm_can_1.h"  // Generated from PUTM_CAN_1.dbc
+#include <cstring> // std::memcpy
 
-namespace putm_can {
-
-/**
- * @brief Constructor initializes HAL.
- * @param hal_ptr Pointer to hardware abstraction layer
- */
-CanInterface::CanInterface(ICanHal* hal_ptr) : hal(hal_ptr) {
-    if (hal) hal->init();
-}
+namespace putm_ev_can {
 
 /**
- * @brief Handles all incoming CAN frames.
- *
- * Unpacks using cantools-generated functions and updates internal state.
+ * @brief Default implementation that delegates TX/RX to HAL, and RX to MessageHandler.
+ * AUTO_INIT = true -> init() wywoływane w konstruktorze (o ile HAL != nullptr).
  */
-void CanInterface::handle_incoming_messages() {
-    CanFrame frame;
-    while (hal->receive(frame)) {
-        switch (frame.id) {
-            case PUTM_CAN_1_BMS_HV_MAIN_FRAME_ID: {
-                bms_hv_main_t msg{};
-                if (bms_hv_main_unpack(&msg, frame.data.data(), frame.dlc) == 0) {
-                    float voltage = bms_hv_main_voltage_sum_decode(msg.voltage_sum);
-                    // Process voltage...
-                }
-                break;
-            }
-            // Add other message handlers here
-            default:
-                break;
+class DefaultCanInterface : public CanInterface {
+public:
+    DefaultCanInterface(PUTM_CAN::ICanHal* hal, MessageHandler& mh)
+        : hal_(hal), handler_(mh) {
+        if (hal_) hal_->init(); // AUTO_INIT = true
+    }
+
+    bool init() override {
+        if (!hal_) return false;
+        return hal_->init(); // idempotent na większości platform
+    }
+
+    bool is_ready() const override {
+        return (hal_ != nullptr) && hal_->is_initialized();
+    }
+
+    void process_received_messages() override {
+        if (!hal_) return;
+        PUTM_CAN::CanFrame f;
+        while (hal_->receive(f)) {
+            handler_.handle_message_with_default(
+                f.id,
+                std::span<const uint8_t>(f.data.data(), f.dlc));
         }
     }
+
+    bool configure_filters(const std::vector<PUTM_CAN::CanFilter>& filters) override {
+        if (!hal_) return false;
+        return hal_->configure_filters(filters);
+    }
+
+protected:
+    bool send_raw(CanId id, std::span<const uint8_t> data) override {
+        if (!hal_) return false;
+        PUTM_CAN::CanFrame frame{};
+        frame.id  = id;
+        frame.dlc = static_cast<uint8_t>(data.size());
+        std::memcpy(frame.data.data(), data.data(), frame.dlc);
+        return hal_->transmit(frame);
+    }
+
+private:
+    PUTM_CAN::ICanHal* hal_;
+    MessageHandler&    handler_;
+};
+
+/* ===== Helper factory (opcjonalne) ===== */
+
+/// Prosta fabryka do użycia w aplikacji (nieobowiązkowa).
+CanInterface* make_default_interface(PUTM_CAN::ICanHal* hal, MessageHandler& mh) {
+    return new DefaultCanInterface(hal, mh);
 }
 
-/**
- * @brief Sends BMS HV main message.
- * @param msg Pre-filled DBC structure
- * @return true if sent successfully
- */
-bool CanInterface::send_bms_hv_main(const bms_hv_main_t& msg) {
-    return send(PUTM_CAN_1_BMS_HV_MAIN_FRAME_ID, msg);
-}
-
-} // namespace putm_can
+} // namespace putm_ev_can
