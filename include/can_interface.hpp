@@ -13,7 +13,7 @@
 #include <functional>
 #include "can_hal.hpp"
 
-// Używamy nagłówka z generatora cantools:
+
 #include "PUTM_CAN_1.h"
 
 namespace putm_ev_can {
@@ -115,5 +115,10 @@ protected:
 };
 
 } // namespace putm_ev_can
+
+inline CanInterface* make_default_interface(PUTM_CAN::ICanHal* hal, MessageHandler& mh) 
+{
+     return new DefaultCanInterface(hal, mh);
+}
 
 #endif // PUTM_EV_CAN_INTERFACE_HPP

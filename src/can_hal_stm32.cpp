@@ -4,6 +4,7 @@
  */
 
 #include "can_hal.hpp"
+#include "main.h"
 
 namespace putm_ev_can {
 

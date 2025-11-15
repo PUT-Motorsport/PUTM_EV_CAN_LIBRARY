@@ -31,6 +31,10 @@ file(GLOB_RECURSE CAN_SOURCES
 add_library(putm_ev_can STATIC ${CAN_SOURCES})
 
 target_include_directories(putm_ev_can PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/dbc/generated
+    include
+    dbc/generated
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/STM32G4xx_HAL_Driver/Inc
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Drivers/CMSIS/Device/ST/STM32G4xx/Include
+)
 )
