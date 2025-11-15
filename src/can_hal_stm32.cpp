@@ -4,8 +4,6 @@
  */
 
 #include "can_hal.hpp"
-#include "main.h"   // STM32 HAL definitions
-#include "fdcan.h"  // CubeMX-generated FDCAN handle + types
 
 namespace putm_ev_can {
 
@@ -94,19 +92,10 @@ public:
     bool is_initialized() const override { return initialized_ && (hfdcan_ != nullptr); }
 
 private:
-    static uint8_t dlc_to_bytes(uint32_t fdcan_dlc) {
-        switch (fdcan_dlc) {
-            case FDCAN_DLC_BYTES_0: return 0;
-            case FDCAN_DLC_BYTES_1: return 1;
-            case FDCAN_DLC_BYTES_2: return 2;
-            case FDCAN_DLC_BYTES_3: return 3;
-            case FDCAN_DLC_BYTES_4: return 4;
-            case FDCAN_DLC_BYTES_5: return 5;
-            case FDCAN_DLC_BYTES_6: return 6;
-            case FDCAN_DLC_BYTES_7: return 7;
-            case FDCAN_DLC_BYTES_8: return 8;
-            default: return 0;
-        }
+
+    static uint8_t dlc_to_bytes(uint32_t fdcan_dlc)
+    {
+     return FDCAN_DLC_TO_BYTES(fdcan_dlc);
     }
 
     FDCAN_HandleTypeDef* hfdcan_ = nullptr;

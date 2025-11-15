@@ -10,6 +10,8 @@
 #include <array>
 #include <vector>
 
+#include "Inc/fdcan.h"
+
 namespace PUTM_CAN {
 
 /**

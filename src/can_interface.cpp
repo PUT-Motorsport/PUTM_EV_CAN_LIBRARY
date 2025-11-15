@@ -6,7 +6,6 @@
 #include "can_interface.hpp"
 #include "message_handler.hpp"
 #include "can_hal.hpp"
-#include <cstring> // std::memcpy
 
 namespace putm_ev_can {
 
