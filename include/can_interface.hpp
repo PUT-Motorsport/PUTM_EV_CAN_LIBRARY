@@ -1,6 +1,6 @@
 /**
  * @file can_interface.hpp
- * @brief High-level CAN interface with DBC auto-mapping (no switch-case).
+ * @brief High-level CAN interface with DBC auto-mapping.
  */
 
 #ifndef PUTM_EV_CAN_INTERFACE_HPP
@@ -12,8 +12,6 @@
 #include <type_traits>
 #include <functional>
 #include "can_hal.hpp"
-
-
 #include "PUTM_CAN_1.h"
 
 namespace putm_ev_can {
@@ -61,7 +59,7 @@ static constexpr DbcEntry DBC_REGISTRY[] = {
     DBC_ENTRY(PC_TEMPERATURE_DATA,     pc_temperature_data),
     DBC_ENTRY(PC_MAIN_DATA,            pc_main_data),
     DBC_ENTRY(PC_LAP_TIMER_DATA,       pc_lap_timer_data),
-    DBC_ENTRY(PDU_CHANNNEL,            pdu_channnel),     // uwaga: pisownia z DBC
+    DBC_ENTRY(PDU_CHANNNEL,            pdu_channnel),
     DBC_ENTRY(PDU_DATA,                pdu_data),
     DBC_ENTRY(DRIVER_INPUT,            driver_input),
     DBC_ENTRY(FRONT_DATA,              front_data),
@@ -79,22 +77,15 @@ inline const DbcEntry* find_dbc_entry(CanId id) {
 
 /* ========================= High-level interface ========================= */
 
-class MessageHandler; // fwd decl (implementacja w message_handler.*)
+class MessageHandler; // Forward declaration
 
 class CanInterface {
 public:
     virtual ~CanInterface() = default;
-
-    /// Initialize the high-level interface (platform may be initialized here).
     virtual bool init() = 0;
-
-    /// Whether interface is ready.
     virtual bool is_ready() const = 0;
-
-    /// Process all received messages (call periodically).
     virtual void process_received_messages() = 0;
 
-    /// Send a DBC-typed message (no switch-case).
     template<typename MsgType>
     bool send(CanId id, const MsgType& msg) {
         const auto* e = find_dbc_entry(id);
@@ -106,19 +97,15 @@ public:
         return send_raw(id, std::span<const uint8_t>(buffer, e->len));
     }
 
-    /// Optional: pass filters to HW (if supported) or ignore (SW fallback elsewhere).
     virtual bool configure_filters(const std::vector<PUTM_CAN::CanFilter>& filters) = 0;
 
 protected:
-    /// Low-level raw send to HAL.
     virtual bool send_raw(CanId id, std::span<const uint8_t> data) = 0;
 };
 
-} // namespace putm_ev_can
+// Tylko deklaracja funkcji - implementacja jest w .cpp
+CanInterface* make_default_interface(PUTM_CAN::ICanHal* hal, MessageHandler& mh);
 
-inline CanInterface* make_default_interface(PUTM_CAN::ICanHal* hal, MessageHandler& mh) 
-{
-     return new DefaultCanInterface(hal, mh);
-}
+} // namespace putm_ev_can
 
 #endif // PUTM_EV_CAN_INTERFACE_HPP

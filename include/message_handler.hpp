@@ -1,6 +1,6 @@
 /**
  * @file message_handler.hpp
- * @brief Type-safe message callbacks + routing (no switch-case).
+ * @brief Type-safe message callbacks + routing (Dependency Injection for locking).
  */
 
 #ifndef PUTM_EV_CAN_MESSAGE_HANDLER_HPP
@@ -8,12 +8,9 @@
 
 #include <functional>
 #include <span>
-#include <iostream>
 #include <unordered_map>
 #include <vector>
 #include <utility>
-#include <mutex>
-#include <numbers>
 
 #include "can_interface.hpp" 
 #include "PUTM_CAN_1.h"
@@ -22,17 +19,22 @@ namespace putm_ev_can {
 
 using CanId = uint32_t;
 
-/**
- * @class MessageHandler
- * @brief Thread-safe callback registry and routing based on DBC.
- */
 class MessageHandler {
 public:
     MessageHandler() = default;
 
+    /**
+     * @brief Konfiguruje mechanizm blokowania (np. wylaczanie przerwan).
+     * Wywolaj to w main.c przed uzyciem biblioteki.
+     */
+    void set_locking_mechanism(std::function<void()> lock_fn, std::function<void()> unlock_fn) {
+        lock_fn_ = lock_fn;
+        unlock_fn_ = unlock_fn;
+    }
+
     template <typename MsgType>
     void register_callback(CanId id, std::function<void(const MsgType&)> callback) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        ScopedLock guard(*this); // Automatyczny lock/unlock
         callbacks_[id] = [id, callback](std::span<const uint8_t> data) {
             MsgType msg{};
             if (decode_to_message<MsgType>(id, data, msg)) {
@@ -54,9 +56,27 @@ public:
     void set_default_callback(std::function<void(CanId, std::span<const uint8_t>)> callback);
 
 private:
+    // Funkcje wstrzykiwane przez uzytkownika
+    std::function<void()> lock_fn_ = nullptr;
+    std::function<void()> unlock_fn_ = nullptr;
+
+    // Wewnetrzna klasa RAII do obslugi blokady
+    class ScopedLock {
+    public:
+        explicit ScopedLock(MessageHandler& mh) : mh_(mh) {
+            if (mh_.lock_fn_) mh_.lock_fn_();
+        }
+        ~ScopedLock() {
+            if (mh_.unlock_fn_) mh_.unlock_fn_();
+        }
+        ScopedLock(const ScopedLock&) = delete;
+        ScopedLock& operator=(const ScopedLock&) = delete;
+    private:
+        MessageHandler& mh_;
+    };
+
     std::unordered_map<CanId, std::function<void(std::span<const uint8_t>)>> callbacks_;
     std::function<void(CanId, std::span<const uint8_t>)> default_callback_;
-    mutable std::mutex mutex_;
 
     template <typename MsgType>
     static bool decode_to_message(CanId id, std::span<const uint8_t> data, MsgType& msg) {
@@ -65,6 +85,9 @@ private:
         if (data.size() != e->len) return false;
         return e->unpack(&msg, data.data(), data.size()) >= 0;
     }
+    
+    // Przyjazn dla ScopedLock, zeby mial dostep do lock_fn_
+    friend class ScopedLock;
 };
 
 } // namespace putm_ev_can

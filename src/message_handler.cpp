@@ -1,107 +1,84 @@
 /**
  * @file message_handler.cpp
- * @brief Message routing + callback management with thread safety.
+ * @brief Message routing + callback management (Dependency Injection support).
  */
 
 #include "message_handler.hpp"
-
-#include <iostream>
-#include <mutex>
 #include <span>
 #include <vector>
 
-namespace putm_ev_can {
+// Usuwamy iostream i exceptions dla czystego embedded
+// Logika blokady jest teraz wewnatrz klasy ScopedLock zdefiniowanej w hpp
 
-static const char* message_id_to_string(CanId id) {
-    // opcjonalne mapowanie do logów (przykładowe)
-    switch (id) {
-        case PUTM_CAN_1_PC_MAIN_DATA_FRAME_ID:        return "PC_MainData";
-        case PUTM_CAN_1_PC_TEMPERATURE_DATA_FRAME_ID: return "PC_TemperatureData";
-        case PUTM_CAN_1_DRIVER_INPUT_FRAME_ID:        return "DriverInput";
-        case PUTM_CAN_1_PDU_DATA_FRAME_ID:            return "PDU_Data";
-        default: return "Unknown";
-    }
-}
+namespace putm_ev_can {
 
 void MessageHandler::handle_message(CanId id, std::span<const uint8_t> data) {
     if (data.empty() || data.size() > 8) return;
-    std::lock_guard<std::mutex> lock(mutex_);
+    
+    // Uzywamy wewnetrznej klasy ScopedLock (zdefiniowanej w .hpp)
+    // Przekazujemy *this, zeby dostala sie do funkcji lock_fn_/unlock_fn_
+    ScopedLock guard(*this); 
+    
     auto it = callbacks_.find(id);
     if (it != callbacks_.end()) {
-        try {
-            it->second(data);
-        } catch (const std::exception& e) {
-            std::cerr << "Callback error for 0x" << std::hex << id
-                      << " (" << message_id_to_string(id) << "): " << e.what() << std::endl;
-        }
+        // Bezposrednie wywolanie callbacka (bez try-catch)
+        it->second(data);
     }
 }
 
 void MessageHandler::handle_message_with_default(CanId id, std::span<const uint8_t> data) {
     if (data.empty() || data.size() > 8) return;
-    std::lock_guard<std::mutex> lock(mutex_);
+    
+    ScopedLock guard(*this);
     auto it = callbacks_.find(id);
     if (it != callbacks_.end()) {
-        try {
-            it->second(data);
-        } catch (const std::exception& e) {
-            std::cerr << "Callback error for 0x" << std::hex << id << ": " << e.what() << std::endl;
-        }
+        it->second(data);
     } else if (default_callback_) {
-        try {
-            default_callback_(id, data);
-        } catch (const std::exception& e) {
-            std::cerr << "Default callback error for 0x" << std::hex << id << ": " << e.what() << std::endl;
-        }
+        default_callback_(id, data);
     }
 }
 
 void MessageHandler::handle_messages_batch(
     const std::vector<std::pair<CanId, std::span<const uint8_t>>>& messages) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    
+    ScopedLock guard(*this);
     for (const auto& [id, data] : messages) {
         if (data.size() > 8 || data.empty()) continue;
+        
         auto it = callbacks_.find(id);
         if (it != callbacks_.end()) {
-            try {
-                it->second(data);
-            } catch (const std::exception& e) {
-                std::cerr << "Batch callback error for 0x" << std::hex << id
-                          << ": " << e.what() << std::endl;
-            }
+            it->second(data);
         } else if (default_callback_) {
-            try {
-                default_callback_(id, data);
-            } catch (const std::exception& e) {
-                std::cerr << "Default batch callback error for 0x" << std::hex << id
-                          << ": " << e.what() << std::endl;
-            }
+            default_callback_(id, data);
         }
     }
 }
 
 bool MessageHandler::has_callback(CanId id) const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    // const_cast jest potrzebny, bo ScopedLock wymaga dostepu do metod (chociaz lock nie zmienia stanu logicznego)
+    // W tym wypadku bezpieczniej jest uzyc mutable na wskaznikach funkcji, co zrobilismy w hpp.
+    // Tutaj po prostu rzutujemy, poniewaz nasze lock_fn_ nie zmieniaja stanu obiektu handlera sensu stricte.
+    ScopedLock guard(const_cast<MessageHandler&>(*this));
     return callbacks_.find(id) != callbacks_.end();
 }
 
 size_t MessageHandler::callback_count() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    ScopedLock guard(const_cast<MessageHandler&>(*this));
     return callbacks_.size();
 }
 
 void MessageHandler::clear_callbacks() {
-    std::lock_guard<std::mutex> lock(mutex_);
+    ScopedLock guard(*this);
     callbacks_.clear();
 }
 
 bool MessageHandler::remove_callback(CanId id) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    ScopedLock guard(*this);
     return callbacks_.erase(id) > 0;
 }
 
 std::vector<CanId> MessageHandler::get_registered_ids() const {
-    std::lock_guard<std::mutex> lock(mutex_);
+    ScopedLock guard(const_cast<MessageHandler&>(*this));
     std::vector<CanId> ids;
     ids.reserve(callbacks_.size());
     for (const auto& [id, _] : callbacks_) ids.push_back(id);
@@ -109,7 +86,7 @@ std::vector<CanId> MessageHandler::get_registered_ids() const {
 }
 
 void MessageHandler::set_default_callback(std::function<void(CanId, std::span<const uint8_t>)> cb) {
-    std::lock_guard<std::mutex> lock(mutex_);
+    ScopedLock guard(*this);
     default_callback_ = std::move(cb);
 }
 

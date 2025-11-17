@@ -1,28 +1,29 @@
 /**
  * @file can_interface.cpp
- * @brief Default high-level CAN interface using HAL + MessageHandler.
+ * @brief Default high-level CAN interface implementation.
  */
 
 #include "can_interface.hpp"
 #include "message_handler.hpp"
 #include "can_hal.hpp"
 
+#include <cstring> // <--- TO JEST KLUCZOWE DLA std::memcpy
+
 namespace putm_ev_can {
 
 /**
  * @brief Default implementation that delegates TX/RX to HAL, and RX to MessageHandler.
- * AUTO_INIT = true -> init() wywoływane w konstruktorze (o ile HAL != nullptr).
  */
 class DefaultCanInterface : public CanInterface {
 public:
     DefaultCanInterface(PUTM_CAN::ICanHal* hal, MessageHandler& mh)
         : hal_(hal), handler_(mh) {
-        if (hal_) hal_->init(); // AUTO_INIT = true
+        if (hal_) hal_->init(); 
     }
 
     bool init() override {
         if (!hal_) return false;
-        return hal_->init(); // idempotent na większości platform
+        return hal_->init(); 
     }
 
     bool is_ready() const override {
@@ -50,6 +51,7 @@ protected:
         PUTM_CAN::CanFrame frame{};
         frame.id  = id;
         frame.dlc = static_cast<uint8_t>(data.size());
+        // Teraz std::memcpy zadziala dzieki <cstring>
         std::memcpy(frame.data.data(), data.data(), frame.dlc);
         return hal_->transmit(frame);
     }
@@ -59,9 +61,9 @@ private:
     MessageHandler&    handler_;
 };
 
-/* ===== Helper factory (opcjonalne) ===== */
+/* ===== Helper factory definition ===== */
 
-/// Prosta fabryka do użycia w aplikacji (nieobowiązkowa).
+// Przenieslismy definicje z .hpp do .cpp, zeby uniknac problemow z kolejnoscia typow
 CanInterface* make_default_interface(PUTM_CAN::ICanHal* hal, MessageHandler& mh) {
     return new DefaultCanInterface(hal, mh);
 }
