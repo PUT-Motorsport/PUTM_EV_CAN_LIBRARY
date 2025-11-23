@@ -5,6 +5,7 @@
 
 #include "can_hal.hpp"
 #include "main.h"
+#include "stm32g4xx_hal.h"
 
 namespace putm_ev_can {
 
@@ -94,9 +95,22 @@ public:
 
 private:
 
-    static uint8_t dlc_to_bytes(uint32_t fdcan_dlc)
+static uint8_t dlc_to_bytes(uint32_t fdcan_dlc)
     {
-     return FDCAN_DLC_TO_BYTES(fdcan_dlc);
+        switch (fdcan_dlc) {
+            case FDCAN_DLC_BYTES_0: return 0;
+            case FDCAN_DLC_BYTES_1: return 1;
+            case FDCAN_DLC_BYTES_2: return 2;
+            case FDCAN_DLC_BYTES_3: return 3;
+            case FDCAN_DLC_BYTES_4: return 4;
+            case FDCAN_DLC_BYTES_5: return 5;
+            case FDCAN_DLC_BYTES_6: return 6;
+            case FDCAN_DLC_BYTES_7: return 7;
+            case FDCAN_DLC_BYTES_8: return 8;
+            // Jeśli kiedyś będziesz obsługiwać CAN FD (powyżej 8 bajtów), dodaj tutaj kolejne case'y.
+            // Twoja struktura CanFrame ma jednak bufor std::array<uint8_t, 8>, więc max to 8.
+            default: return 0; 
+        }
     }
 
     FDCAN_HandleTypeDef* hfdcan_ = nullptr;
