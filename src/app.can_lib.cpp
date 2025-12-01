@@ -1,40 +1,39 @@
+/**
+ * @file app_can_lib.cpp
+ * @brief Implementation of the AppCAN facade.
+ */
+
 #include "app_can_lib.hpp"
-#include <vector>
 
 bool AppCAN::Init(FDCAN_HandleTypeDef* hfdcan) {
     if (!hfdcan) return false;
 
-    // 1. Ustawienie blokady przerwań (wspólne dla wszystkich, ale ustawiane per instancja)
+    // 1. Configure Hardware Layer
+    hal_.set_handle(hfdcan);
+
+    // 2. Configure Message Handler (Thread Safety)
     handler_.set_locking_mechanism(
         []() { __disable_irq(); },
         []() { __enable_irq(); }
     );
 
-    // 2. Tworzymy nowy obiekt HAL dedykowany dla tego uchwytu (hfdcan1 lub hfdcan2)
-    hal_ = new putm_ev_can::Stm32CanHal(hfdcan);
-
-    // 3. Tworzymy główny interfejs
-    interface_ = putm_ev_can::make_default_interface(hal_, handler_);
-
-    if (!interface_) return false;
-
-    // 4. Konfigurujemy filtry (domyślnie przepuść wszystko)
-    std::vector<PUTM_CAN::CanFilter> filters;
-    filters.push_back({
-        .id = 0,
-        .mask = 0x000, // Maska 0 = Don't care -> odbierz wszystko
-        .extended = false,
-        .fifo = 0
-    });
+    // 3. Configure Filters
+    // Create a filter that accepts ALL messages (Mask 0x000)
+    // Using std::array ensures allocation on stack, no heap usage.
+    std::array<PUTM_CAN::CanFilter, 1> filters = {{
+        { .id = 0, .mask = 0x000, .extended = false, .fifo = 0 }
+    }};
     
-    interface_->configure_filters(filters);
+    // Cast array to span automatically
+    if (!interface_.configure_filters(filters)) {
+        return false;
+    }
 
-    // 5. Uruchamiamy ten konkretny interfejs
-    return interface_->init();
+    // 4. Start Interface (Initializes HAL and starts FDCAN)
+    return interface_.init();
 }
 
 void AppCAN::Poll() {
-    if (interface_) {
-        interface_->process_received_messages();
-    }
+    // Delegate to the interface implementation
+    interface_.process_received_messages();
 }

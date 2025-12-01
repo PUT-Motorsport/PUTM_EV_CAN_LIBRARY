@@ -1,6 +1,7 @@
 /**
  * @file message_handler.hpp
- * @brief Type-safe message callbacks + routing (Dependency Injection for locking).
+ * @brief Message callback manager and router.
+ * @details Optimized for embedded systems: uses a static array instead of the heap.
  */
 
 #ifndef PUTM_EV_CAN_MESSAGE_HANDLER_HPP
@@ -8,85 +9,108 @@
 
 #include <functional>
 #include <span>
-#include <unordered_map>
-#include <vector>
-#include <utility>
-
+#include <array>
+#include <algorithm>
 #include "can_interface.hpp" 
 #include "PUTM_CAN_1.h"
 
 namespace putm_ev_can {
 
-using CanId = uint32_t;
+// Import CanId from HAL namespace
+using PUTM_CAN::CanId;
 
+/**
+ * @brief Maximum number of registered callbacks.
+ */
+constexpr size_t MAX_CALLBACKS = 32;
+
+/**
+ * @brief Class managing message distribution to registered callbacks.
+ */
 class MessageHandler {
 public:
     MessageHandler() = default;
 
     /**
-     * @brief Konfiguruje mechanizm blokowania (np. wylaczanie przerwan).
-     * Wywolaj to w main.c przed uzyciem biblioteki.
+     * @brief Configures the interrupt locking mechanism.
+     * @param lock_fn Function to disable interrupts.
+     * @param unlock_fn Function to enable interrupts.
      */
     void set_locking_mechanism(std::function<void()> lock_fn, std::function<void()> unlock_fn) {
         lock_fn_ = lock_fn;
         unlock_fn_ = unlock_fn;
     }
 
+    /**
+     * @brief Registers a callback for a specific ID.
+     * @return true if successful, false if MAX_CALLBACKS reached.
+     */
     template <typename MsgType>
-    void register_callback(CanId id, std::function<void(const MsgType&)> callback) {
-        ScopedLock guard(*this); // Automatyczny lock/unlock
-        callbacks_[id] = [id, callback](std::span<const uint8_t> data) {
-            MsgType msg{};
-            if (decode_to_message<MsgType>(id, data, msg)) {
-                callback(msg);
+    bool register_callback(CanId id, std::function<void(const MsgType&)> callback) {
+        ScopedLock guard(*this);
+        
+        // 1. Update existing
+        for (auto& entry : callbacks_) {
+            if (entry.active && entry.id == id) {
+                entry.callback = [id, callback](std::span<const uint8_t> data) {
+                    MsgType msg{};
+                    if (decode_to_message<MsgType>(id, data, msg)) {
+                        callback(msg);
+                    }
+                };
+                return true;
             }
-        };
+        }
+
+        // 2. Find empty slot
+        for (auto& entry : callbacks_) {
+            if (!entry.active) {
+                entry.id = id;
+                entry.active = true;
+                entry.callback = [id, callback](std::span<const uint8_t> data) {
+                    MsgType msg{};
+                    if (decode_to_message<MsgType>(id, data, msg)) {
+                        callback(msg);
+                    }
+                };
+                return true;
+            }
+        }
+        return false; 
     }
 
-    void handle_message(CanId id, std::span<const uint8_t> data);
     void handle_message_with_default(CanId id, std::span<const uint8_t> data);
-    void handle_messages_batch(const std::vector<std::pair<CanId, std::span<const uint8_t>>>& messages);
-
-    bool has_callback(CanId id) const;
-    size_t callback_count() const;
-    void clear_callbacks();
-    bool remove_callback(CanId id);
-    std::vector<CanId> get_registered_ids() const;
-
-    void set_default_callback(std::function<void(CanId, std::span<const uint8_t>)> callback);
 
 private:
-    // Funkcje wstrzykiwane przez uzytkownika
     std::function<void()> lock_fn_ = nullptr;
     std::function<void()> unlock_fn_ = nullptr;
 
-    // Wewnetrzna klasa RAII do obslugi blokady
+    struct CallbackEntry {
+        bool active = false;
+        CanId id = 0;
+        std::function<void(std::span<const uint8_t>)> callback;
+    };
+
+    std::array<CallbackEntry, MAX_CALLBACKS> callbacks_;
+    std::function<void(CanId, std::span<const uint8_t>)> default_callback_;
+
+    // RAII Lock
     class ScopedLock {
     public:
-        explicit ScopedLock(MessageHandler& mh) : mh_(mh) {
-            if (mh_.lock_fn_) mh_.lock_fn_();
-        }
-        ~ScopedLock() {
-            if (mh_.unlock_fn_) mh_.unlock_fn_();
-        }
-        ScopedLock(const ScopedLock&) = delete;
-        ScopedLock& operator=(const ScopedLock&) = delete;
+        explicit ScopedLock(MessageHandler& mh) : mh_(mh) { if (mh_.lock_fn_) mh_.lock_fn_(); }
+        ~ScopedLock() { if (mh_.unlock_fn_) mh_.unlock_fn_(); }
     private:
         MessageHandler& mh_;
     };
 
-    std::unordered_map<CanId, std::function<void(std::span<const uint8_t>)>> callbacks_;
-    std::function<void(CanId, std::span<const uint8_t>)> default_callback_;
-
     template <typename MsgType>
     static bool decode_to_message(CanId id, std::span<const uint8_t> data, MsgType& msg) {
+        // Now visible due to can_interface.hpp include
         const auto* e = find_dbc_entry(id);
-        if (!e) return false;
-        if (data.size() != e->len) return false;
+        if (!e || data.size() != e->len) return false;
         return e->unpack(&msg, data.data(), data.size()) >= 0;
     }
     
-    // Przyjazn dla ScopedLock, zeby mial dostep do lock_fn_
     friend class ScopedLock;
 };
 

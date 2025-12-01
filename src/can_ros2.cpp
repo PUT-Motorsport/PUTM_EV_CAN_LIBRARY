@@ -1,31 +1,34 @@
 /**
  * @file can_ros2.cpp
- * @brief Minimal SocketCAN/ROS2 HAL stub (soft-filtering in upper layer).
- *
- * UWAGA: to jest minimalny szkic. Jeśli masz uchwyt socketa, podmień
- * implementacje transmit/receive/configure_filters na realne.
+ * @brief Minimal SocketCAN/ROS2 HAL stub.
+ * @details This file serves as a placeholder for non-embedded (Linux/ROS2) implementations.
+ * It has been updated to match the embedded-friendly interface (std::span).
  */
 
-#include "can_hal.hpp"
+#include "PUTM_EV_CAN_LIBRARY/include/can_hal.hpp"
 
 namespace putm_ev_can {
 
+/**
+ * @brief Stub implementation of HAL for ROS2/Linux systems.
+ */
 class Ros2CanHal : public PUTM_CAN::ICanHal {
 public:
     bool init() override { initialized_ = true; return true; }
 
     bool transmit(const PUTM_CAN::CanFrame& /*frame*/) override {
-        // TODO: wyślij przez SocketCAN
+        // TODO: Implement SocketCAN send here
         return true;
     }
 
     bool receive(PUTM_CAN::CanFrame& /*frame*/) override {
-        // TODO: odbierz z SocketCAN (non-blocking)
+        // TODO: Implement SocketCAN receive here (non-blocking)
         return false;
     }
 
-    bool configure_filters(const std::vector<PUTM_CAN::CanFilter>& /*filters*/) override {
-        // TODO: setsockopt(CAN_RAW_FILTER). Na razie OK -> soft filtering wyżej.
+    // FIX: Updated signature to match ICanHal (std::span instead of std::vector)
+    bool configure_filters(std::span<const PUTM_CAN::CanFilter> /*filters*/) override {
+        // TODO: Implement setsockopt(CAN_RAW_FILTER) here.
         return true;
     }
 
