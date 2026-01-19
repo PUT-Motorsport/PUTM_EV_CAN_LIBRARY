@@ -72,20 +72,21 @@ bool Stm32CanHal::receive(PUTM_CAN::CanFrame& frame) {
 }
 
 bool Stm32CanHal::configure_filters(std::span<const PUTM_CAN::CanFilter> filters) {
-    if (!initialized_ || !hfdcan_) return false;
+    if (!hfdcan_) return false;
 
     uint32_t idx = 0;
     for (const auto& f : filters) {
         FDCAN_FilterTypeDef fd{};
         fd.IdType = f.extended ? FDCAN_EXTENDED_ID : FDCAN_STANDARD_ID;
         fd.FilterIndex = idx++;
-        fd.FilterType = FDCAN_FILTER_MASK; // Classic mask mode
+        fd.FilterType = FDCAN_FILTER_MASK;
         fd.FilterConfig = (f.fifo == 1) ? FDCAN_FILTER_TO_RXFIFO1 : FDCAN_FILTER_TO_RXFIFO0;
-        fd.FilterID1 = f.id;   // ID to match
-        fd.FilterID2 = f.mask; // Mask
+        fd.FilterID1 = f.id;
+        fd.FilterID2 = f.mask;
         
         if (HAL_FDCAN_ConfigFilter(hfdcan_, &fd) != HAL_OK) return false;
     }
+    
     return true;
 }
 
