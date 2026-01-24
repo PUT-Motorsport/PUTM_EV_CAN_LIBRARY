@@ -1,0 +1,288 @@
+\documentclass[a4paper,11pt]{article}
+
+% Polskie znaki i kodowanie
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[polish]{babel}
+
+% Pakiety do formatowania
+\usepackage{geometry}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{titlesec}
+\usepackage{booktabs} % Do ładniejszych tabel
+
+% Ustawienia strony
+\geometry{
+ a4paper,
+ total={170mm,257mm},
+ left=20mm,
+ top=20mm,
+}
+
+% Kolory do listingów kodu
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.96,0.96,0.96}
+
+% Styl kodu CMake
+\lstdefinestyle{cmakestyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{blue},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2,
+    language=make
+}
+
+% Styl kodu C++
+\lstdefinestyle{cppstyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2,
+    language=C++
+}
+
+\lstset{style=cppstyle}
+
+% Metadane dokumentu
+\title{\textbf{Dokumentacja Biblioteki PUTM EV CAN}}
+\author{Michał Błotniak}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Niniejszy dokument stanowi instrukcję obsługi biblioteki \texttt{PUTM\_EV\_CAN\_LIBRARY}. Biblioteka została zaprojektowana dla systemów wbudowanych (STM32) oraz środowiska ROS2, kładąc nacisk na statyczną alokację pamięci (Zero-Allocation), bezpieczeństwo typów (C++20) oraz automatyczną obsługę ramek DBC. Dokument definiuje również obowiązującą w zespole konwencję nazewnictwa magistral CAN.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Integracja i Konfiguracja w CMake}
+
+Biblioteka jest dystrybuowana jako moduł CMake. Aby użyć jej w projekcie, należy zmodyfikować główny plik \texttt{CMakeLists.txt} projektu.
+
+\subsection{Dodawanie biblioteki do projektu}
+
+W głównym pliku \texttt{CMakeLists.txt} (np. w katalogu głównym projektu STM32 lub węzła ROS2) należy dodać podkatalog z biblioteką oraz zlinkować ją z plikiem wykonywalnym.
+
+\begin{lstlisting}[style=cmakestyle, caption=Podstawowa konfiguracja CMake]
+# 1. Dodanie podkatalogu biblioteki
+add_subdirectory(Core/Inc/PUTM_EV_CAN_LIBRARY)
+
+# 2. Linkowanie biblioteki z twoim projektem
+# 'twoj_projekt' to nazwa zdefiniowana w add_executable()
+target_link_libraries(twoj_projekt PRIVATE putm_ev_can)
+\end{lstlisting}
+
+\subsection{Wybór konfiguracji (STM32 vs ROS2)}
+
+Biblioteka wspiera dwa backhendy sprzętowe. Wybór następuje poprzez ustawienie zmiennej \texttt{PUTM\_BACKEND} **przed** wywołaniem \texttt{add\_subdirectory}.
+
+\subsubsection{Konfiguracja dla STM32}
+Jest to domyślna konfiguracja. Wymaga ona, aby w projekcie dostępna była biblioteka HAL.
+
+\begin{lstlisting}[style=cmakestyle, caption=Konfiguracja dla STM32]
+set(PUTM_BACKEND "STM32" CACHE STRING "Select backend" FORCE)
+add_subdirectory(Core/Inc/PUTM_EV_CAN_LIBRARY)
+\end{lstlisting}
+
+\subsubsection{Konfiguracja dla ROS2 / Linux}
+W tym trybie biblioteka korzysta z systemowego SocketCAN.
+
+\begin{lstlisting}[style=cmakestyle, caption=Konfiguracja dla Linux/ROS2]
+set(PUTM_BACKEND "LINUX" CACHE STRING "Select backend" FORCE)
+add_subdirectory(lib/PUTM_EV_CAN_LIBRARY)
+\end{lstlisting}
+
+\subsection{Włączenie obsługi CAN FD}
+Domyślnie biblioteka pracuje w trybie Classic CAN. Aby włączyć obsługę ramek do 64 bajtów:
+
+\begin{lstlisting}[style=cmakestyle]
+option(PUTM_USE_CAN_FD "Enable CAN FD" ON)
+\end{lstlisting}
+
+\section{Konwencja Nomenklatury Magistral}
+
+W projekcie pojazdu zdefiniowano trzy fizyczne magistrale CAN. Aby zachować spójność w kodzie (na STM32 i w ROS2), \textbf{należy bezwzględnie} stosować poniższe nazewnictwo instancji klasy \texttt{AppCAN}.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Nazwa Instancji} & \textbf{Funkcja Magistrali} & \textbf{Opis} \\ \midrule
+\texttt{\textbf{can\_m}} & \textbf{Main} & Główna magistrala, większość danych, telemetria. \\
+\texttt{\textbf{can\_pt}} & \textbf{Powertrain (ECU/INV)} & Komunikacja wyłącznie falownik - silniki. \\
+\texttt{\textbf{can\_dv}} & \textbf{Driverless} & Wymiana sygnałów w trybie jazdy autonomicznej. \\ \bottomrule
+\end{tabular}
+\caption{Obowiązująca nomenklatura instancji AppCAN}
+\label{tab:nomenklatura}
+\end{table}
+
+Wszystkie przykłady w dalszej części dokumentacji będą odwoływać się do tych konkretnych nazw zmiennych.
+
+\section{Poprawna inicjalizacja}
+
+Biblioteka nie używa dynamicznej alokacji pamięci. Instancje muszą być zadeklarowane jako zmienne globalne.
+
+\subsection{Krok 1: Instancje Globalne}
+W pliku \texttt{main.cpp} (lub odpowiedniku w ROS2) należy utworzyć obiekty dla wykorzystywanych magistral.
+
+\begin{lstlisting}
+/* Private variables */
+// Definicja instancji zgodnie z przyjeta nomenklatura
+AppCAN can_m;   // Main Bus
+AppCAN can_pt;  // Powertrain Bus
+AppCAN can_dv;  // Driverless Bus
+\end{lstlisting}
+
+\subsection{Krok 2: Wywołanie Init}
+Inicjalizację należy przeprowadzić wewnątrz funkcji \texttt{main()}, \textbf{po} konfiguracji peryferiów przez CubeMX. Każdej instancji przypisujemy odpowiedni uchwyt sprzętowy (\texttt{hfdcanX}).
+
+\begin{lstlisting}
+/* USER CODE BEGIN 2 */
+
+// 1. Inicjalizacja Main CAN (zazwyczaj FDCAN1)
+if (!can_m.Init(&hfdcan1)) {
+    Error_Handler(); // Blad inicjalizacji Main
+}
+
+// 2. Inicjalizacja Powertrain CAN (zazwyczaj FDCAN2)
+if (!can_pt.Init(&hfdcan2)) {
+    Error_Handler(); // Blad inicjalizacji PT
+}
+
+// 3. Inicjalizacja Driverless CAN (zazwyczaj FDCAN3)
+if (!can_dv.Init(&hfdcan3)) {
+    Error_Handler(); // Blad inicjalizacji DV
+}
+
+/* USER CODE END 2 */
+\end{lstlisting}
+
+\textbf{Uwaga:} Należy zweryfikować w konfiguracji CubeMX, który \texttt{hfdcanX} odpowiada fizycznie której magistrali na PCB.
+
+\section{Wysyłanie danych (TX)}
+
+Wysyłanie odbywa się poprzez metodę \texttt{Send} wywołaną na odpowiedniej instancji magistrali (zazwyczaj \texttt{can\_m}).
+
+\begin{lstlisting}
+// Przyklad w petli glownej (co 100ms)
+if (HAL_GetTick() - last_tx > 100) {
+    last_tx = HAL_GetTick();
+
+    // 1. Tworzenie i zerowanie struktury
+    PUTM_CAN_1_pc_main_data_t tx_msg = {0};
+
+    // 2. Wypelnianie danych
+    tx_msg.vehicle_speed = 125;
+    tx_msg.inverters_ready = 1;
+    
+    // 3. Wyslanie na magistrale MAIN (can_m)
+    if (can_m.Send(PUTM_CAN_1_PC_MAIN_DATA_FRAME_ID, tx_msg)) {
+        HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin); // Potwierdzenie TX
+    }
+}
+\end{lstlisting}
+
+Jeśli dane (np. sterowanie falownikiem) mają trafić na magistralę Powertrain, używamy obiektu \texttt{can\_pt}:
+\begin{lstlisting}
+can_pt.Send(PUTM_CAN_1_AMK_SETPOINTS_FRAME_ID, amk_msg);
+\end{lstlisting}
+
+\section{Odbieranie danych (RX)}
+
+Odbiór wymaga rejestracji callbacków dla konkretnych instancji magistral oraz cyklicznego odpytywania (polling).
+
+\subsection{Krok 1: Rejestracja Callbacku}
+Rejestrację wykonujemy raz, przed pętlą główną. Należy zdecydować, z której magistrali spodziewamy się danej ramki.
+
+\begin{lstlisting}
+// Odbior danych z Main CAN (np. input od kierowcy)
+can_m.RegisterCallback<PUTM_CAN_1_driver_input_t>(
+    PUTM_CAN_1_DRIVER_INPUT_FRAME_ID,
+    [](const PUTM_CAN_1_driver_input_t& msg) {
+        // Logika obslugi (wywolywana automatycznie)
+        if (msg.pedal_position > 1000) {
+            // ...
+        }
+    }
+);
+
+// Odbior danych z Powertrain CAN (np. status falownika)
+can_pt.RegisterCallback<PUTM_CAN_1_amk_actual_values_1_t>(
+    PUTM_CAN_1_AMK_ACTUAL_VALUES_1_FRAME_ID,
+    [](const PUTM_CAN_1_amk_actual_values_1_t& msg) {
+        // ...
+    }
+);
+\end{lstlisting}
+
+\subsection{Krok 2: Polling w pętli głównej}
+W pętli nieskończonej należy obsługiwać \textbf{wszystkie} aktywne instancje.
+
+\begin{lstlisting}
+while (1) {
+    // Obsluga buforow wszystkich magistral
+    can_m.Poll();
+    can_pt.Poll();
+    can_dv.Poll();
+    
+    // ... reszta kodu ...
+}
+\end{lstlisting}
+
+\section{Najczęściej popełniane błędy}
+
+\begin{itemize}
+    \item \textbf{Pomylenie instancji:} Wysłanie wiadomości na \texttt{can\_m} zamiast \texttt{can\_pt}, przez co falownik jej nie otrzyma (separacja fizyczna sieci).
+    \item \textbf{Brak wywołania \texttt{Poll()} dla jednej z instancji:} Skutkuje przepełnieniem bufora sprzętowego na tej magistrali i brakiem wywołań callbacków.
+    \item \textbf{Zła konfiguracja zegarów FDCAN:} Jeśli \texttt{Init()} zwraca \texttt{false}, sprawdź Clock Configuration w CubeMX.
+    \item \textbf{Brak inicjalizacji struktury zerami:} Zawsze używaj \texttt{Typ zmienna = \{0\};}.
+\end{itemize}
+
+\section{Opis plików biblioteki}
+
+Biblioteka składa się z kilku warstw abstrakcji:
+
+\begin{enumerate}
+    \item \textbf{\texttt{app\_can\_lib.hpp / .cpp}} -- \textbf{Fasada}. Klasa \texttt{AppCAN}. To tutaj tworzymy instancje \texttt{can\_m}, \texttt{can\_pt}, \texttt{can\_dv}.
+    \item \textbf{\texttt{can\_hal.hpp}} -- \textbf{Abstrakcja Sprzętowa}. Interfejs \texttt{ICanHal}.
+    \item \texttt{\textbf{can\_hal\_stm32.hpp / .cpp}} -- \textbf{Implementacja STM32}. Obsługa rejestrów FDCAN.
+    \item \textbf{\texttt{message\_handler.hpp}} -- \textbf{Router}. Zarządza callbackami.
+    \item \textbf{\texttt{can\_interface.hpp}} -- \textbf{Logika DBC}. Rejestr ramek.
+    \item \textbf{\texttt{dbc/generated/PUTM\_CAN\_1.h}} -- \textbf{Definicje}. Wygenerowane struktury C.
+\end{enumerate}
+
+\end{document}
