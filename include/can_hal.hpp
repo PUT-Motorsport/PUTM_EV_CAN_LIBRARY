@@ -11,7 +11,7 @@
 
 #include <cstdint>
 #include <array>
-#include <span> // Requires C++20 standard
+#include <span> 
 
 namespace PUTM_CAN {
 
@@ -19,6 +19,16 @@ namespace PUTM_CAN {
  * @brief Global definition of the CAN Identifier type.
  */
 using CanId = uint32_t;
+
+/**
+ * @brief Represents the current state of the CAN bus.
+ * @note Added for LED status indication.
+ */
+enum class BusStatus {
+    OK,      ///< Bus is operating normally (Error Active).
+    WARNING, ///< Bus is in Warning or Error Passive state (transient errors).
+    BUS_OFF  ///< Bus is Off (critical error, no communication).
+};
 
 /**
  * @brief Structure representing a raw CAN frame.
@@ -78,6 +88,13 @@ public:
      * @brief Checks if the hardware is initialized.
      */
     virtual bool is_initialized() const { return true; }
+
+    /**
+     * @brief Retrieves the current diagnostic status of the bus.
+     * @return Current BusStatus (OK, WARNING, or BUS_OFF).
+     * @note Default implementation returns OK to satisfy interface requirements if not implemented.
+     */
+    virtual BusStatus get_bus_status() const { return BusStatus::OK; }
 };
 
 } // namespace PUTM_CAN

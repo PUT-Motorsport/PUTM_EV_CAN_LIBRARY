@@ -41,9 +41,25 @@ public:
     bool Init(FDCAN_HandleTypeDef* hfdcan);
 
     /**
-     * @brief Polls for new messages. Call in the main loop.
+     * @brief Polls for new messages and updates the status LED.
+     * @details Call this cyclically in the main loop.
      */
     void Poll();
+
+    /**
+     * @brief Configures a GPIO pin to act as a status indicator.
+     * @details LED behavior:
+     * - Steady ON: Bus Off (Error)
+     * - 1Hz Blink: OK
+     * - Irregular Blink: Warning (Bus Full/Error Passive)
+     * * @param port GPIO Port (e.g., GPIOA)
+     * @param pin GPIO Pin (e.g., GPIO_PIN_5)
+     */
+    void ConfigStatusLed(GPIO_TypeDef* port, uint16_t pin) {
+        led_config_.port = port;
+        led_config_.pin = pin;
+        led_config_.enabled = true;
+    }
 
     /**
      * @brief Sends a CAN frame.
@@ -68,9 +84,25 @@ public:
     }
 
 private:
+    /**
+     * @brief Internal configuration for the status LED.
+     */
+    struct StatusLedConfig {
+        GPIO_TypeDef* port = nullptr; ///< GPIO Port
+        uint16_t pin = 0;             ///< GPIO Pin
+        bool enabled = false;         ///< Is LED configured?
+    };
+
+    /**
+     * @brief Updates the status LED based on bus state.
+     */
+    void handle_status_led();
+
     putm_ev_can::Stm32CanHal hal_;
     putm_ev_can::MessageHandler handler_;
     putm_ev_can::DefaultCanInterface interface_;
+    
+    StatusLedConfig led_config_;
 };
 
 #endif // APP_CAN_LIB_HPP

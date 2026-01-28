@@ -7,16 +7,11 @@
 
 namespace putm_ev_can {
 
-// Note: Constructor is default, hfdcan_ is set via set_handle()
-
 bool Stm32CanHal::init() {
     if (!hfdcan_) return false;
 
-    // Start the FDCAN module
     if (HAL_FDCAN_Start(hfdcan_) != HAL_OK) return false;
     
-    // Activate Rx FIFO 0 New Message Notification
-    // Adjust this if you use interrupts differently
     if (HAL_FDCAN_ActivateNotification(hfdcan_, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK) {
         return false;
     }
@@ -32,13 +27,12 @@ bool Stm32CanHal::transmit(const PUTM_CAN::CanFrame& frame) {
     tx.Identifier = frame.id;
     tx.IdType = (frame.id <= 0x7FF) ? FDCAN_STANDARD_ID : FDCAN_EXTENDED_ID;
     tx.TxFrameType = FDCAN_DATA_FRAME;
-    tx.ErrorStateIndicator = FDCAN_ESI_ACTIVE; // Active error state
-    tx.BitRateSwitch = FDCAN_BRS_OFF;          // No bit-rate switching
-    tx.FDFormat = FDCAN_CLASSIC_CAN;           // Classic CAN (not FD)
-    tx.TxEventFifoControl = FDCAN_NO_TX_EVENTS;// Don't store TX events
+    tx.ErrorStateIndicator = FDCAN_ESI_ACTIVE; 
+    tx.BitRateSwitch = FDCAN_BRS_OFF;          
+    tx.FDFormat = FDCAN_CLASSIC_CAN;           
+    tx.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
     tx.MessageMarker = 0;
 
-    // Map DLC to HAL definition
     switch (frame.dlc) {
         case 0: tx.DataLength = FDCAN_DLC_BYTES_0; break;
         case 1: tx.DataLength = FDCAN_DLC_BYTES_1; break;
@@ -49,11 +43,9 @@ bool Stm32CanHal::transmit(const PUTM_CAN::CanFrame& frame) {
         case 6: tx.DataLength = FDCAN_DLC_BYTES_6; break;
         case 7: tx.DataLength = FDCAN_DLC_BYTES_7; break;
         case 8: tx.DataLength = FDCAN_DLC_BYTES_8; break;
-        default: return false; // Unsupported DLC
+        default: return false; 
     }
 
-    // Add to TX FIFO
-    // Note: const_cast is safe here because HAL copies data to registers
     return HAL_FDCAN_AddMessageToTxFifoQ(hfdcan_, &tx, const_cast<uint8_t*>(frame.data.data())) == HAL_OK;
 }
 
@@ -62,7 +54,6 @@ bool Stm32CanHal::receive(PUTM_CAN::CanFrame& frame) {
 
     FDCAN_RxHeaderTypeDef rx{};
     
-    // Attempt to retrieve message from FIFO 0
     if (HAL_FDCAN_GetRxMessage(hfdcan_, FDCAN_RX_FIFO0, &rx, frame.data.data()) == HAL_OK) {
         frame.id = rx.Identifier;
         frame.dlc = dlc_to_bytes(rx.DataLength);
@@ -88,6 +79,24 @@ bool Stm32CanHal::configure_filters(std::span<const PUTM_CAN::CanFilter> filters
     }
     
     return true;
+}
+
+PUTM_CAN::BusStatus Stm32CanHal::get_bus_status() const {
+    if (!hfdcan_) return PUTM_CAN::BusStatus::BUS_OFF;
+
+    FDCAN_ProtocolStatusTypeDef status;
+    if (HAL_FDCAN_GetProtocolStatus(hfdcan_, &status) != HAL_OK) {
+        return PUTM_CAN::BusStatus::BUS_OFF;
+    }
+
+    if (status.BusOff) {
+        return PUTM_CAN::BusStatus::BUS_OFF;
+    }
+    if (status.ErrorPassive || status.Warning) {
+        return PUTM_CAN::BusStatus::WARNING;
+    }
+
+    return PUTM_CAN::BusStatus::OK;
 }
 
 uint8_t Stm32CanHal::dlc_to_bytes(uint32_t fdcan_dlc) {

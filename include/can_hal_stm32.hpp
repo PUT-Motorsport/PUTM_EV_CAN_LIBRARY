@@ -30,6 +30,12 @@ public:
     bool receive(PUTM_CAN::CanFrame& frame) override;
     bool configure_filters(std::span<const PUTM_CAN::CanFilter> filters) override;
     
+    /**
+     * @brief Checks the FDCAN protocol status register.
+     * @return BusStatus based on Error Passive/Warning/BusOff flags.
+     */
+    PUTM_CAN::BusStatus get_bus_status() const override;
+
     bool is_initialized() const override {
         return initialized_ && (hfdcan_ != nullptr);
     }
