@@ -12,7 +12,7 @@
 #include <array>
 #include <algorithm>
 #include "can_interface.hpp" 
-#include "PUTM_CAN_1.h"
+#include "PUTM_CAN_M.h"
 
 namespace putm_ev_can {
 

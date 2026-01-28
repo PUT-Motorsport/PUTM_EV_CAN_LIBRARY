@@ -9,7 +9,7 @@
 #define APP_CAN_LIB_HPP
 
 #include "stm32g4xx_hal.h"
-#include "PUTM_CAN_1.h"
+#include "PUTM_CAN_M.h"
 #include <functional>
 #include <array>
 

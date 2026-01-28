@@ -10,7 +10,7 @@
 #include <span>
 #include <cstring>
 #include "can_hal.hpp"
-#include "PUTM_CAN_1.h"
+#include "PUTM_CAN_M.h"
 
 namespace putm_ev_can {
 
@@ -47,17 +47,17 @@ struct DbcThunk {
 };
 
 /**
- * @brief Macro to simplify registry entries. Requires PUTM_CAN_1.h macros.
+ * @brief Macro to simplify registry entries. Requires PUTM_CAN_M.h macros.
  */
 #define DBC_ENTRY(MSG_UP, msg_lc) \
-    { PUTM_CAN_1_##MSG_UP##_FRAME_ID, \
-      PUTM_CAN_1_##MSG_UP##_LENGTH, \
-      &DbcThunk<PUTM_CAN_1_##msg_lc##_t, \
-                PUTM_CAN_1_##msg_lc##_pack, \
-                PUTM_CAN_1_##msg_lc##_unpack>::pack_generic, \
-      &DbcThunk<PUTM_CAN_1_##msg_lc##_t, \
-                PUTM_CAN_1_##msg_lc##_pack, \
-                PUTM_CAN_1_##msg_lc##_unpack>::unpack_generic }
+    { PUTM_CAN_M_##MSG_UP##_FRAME_ID, \
+      PUTM_CAN_M_##MSG_UP##_LENGTH, \
+      &DbcThunk<PUTM_CAN_M_##msg_lc##_t, \
+                PUTM_CAN_M_##msg_lc##_pack, \
+                PUTM_CAN_M_##msg_lc##_unpack>::pack_generic, \
+      &DbcThunk<PUTM_CAN_M_##msg_lc##_t, \
+                PUTM_CAN_M_##msg_lc##_pack, \
+                PUTM_CAN_M_##msg_lc##_unpack>::unpack_generic }
 
 /**
  * @brief Registry of all supported CAN frames.

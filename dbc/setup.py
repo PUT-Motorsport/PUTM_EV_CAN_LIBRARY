@@ -1,6 +1,6 @@
 import cantools
 import cantools.database
-# Import modułu generatora
+# Import generator module directly
 import cantools.database.can.c_source
 import os
 import hashlib
@@ -10,17 +10,17 @@ import datetime
 import sys
 import re
 
-# --- Konfiguracja ścieżek ---
+# --- Configuration & Paths ---
 BASE_DIR = Path(__file__).resolve().parent
-# Szukamy CMakeLists.txt poziom wyżej
+# Look for CMakeLists.txt one level up
 CMAKE_FILE = BASE_DIR.parent / 'CMakeLists.txt' 
 GENERATED_DIR = BASE_DIR / 'generated'
 METADATA_FILE = BASE_DIR / 'codegen_metadata.json'
 
 def get_backend_from_cmake():
-    """Odczytuje PUTM_CAN_BACKEND z pliku CMakeLists.txt."""
+    """Reads PUTM_CAN_BACKEND from CMakeLists.txt."""
     if not CMAKE_FILE.exists():
-        print(f"Ostrzeżenie: Nie znaleziono {CMAKE_FILE}. Używam domyślnego: STM32.")
+        print(f"[WARN] {CMAKE_FILE} not found. Using default: STM32.")
         return "STM32"
     
     with open(CMAKE_FILE, 'r', encoding='utf-8') as f:
@@ -72,14 +72,14 @@ def update_metadata(dbc_file):
         json.dump(metadata, f, indent=4)
 
 def generate_c_code(dbc_file):
-    """Generuje kod C/H używając funkcji generate (poprawione argumenty)."""
+    """Generates C/H code using cantools v40+ generate function."""
     db_name = dbc_file.stem
     try:
-        # 1. Wczytanie bazy danych
+        # 1. Load Database
         db = cantools.database.load_file(dbc_file)
         
-        # 2. Generowanie kodu
-        # UWAGA: Usunięto parametr fuzzer_header_name, który powodował błąd.
+        # 2. Generate Code
+        # The generate function returns a tuple: (header, source, fuzzer_source, fuzzer_header)
         gen_result = cantools.database.can.c_source.generate(
             database=db,
             database_name=db_name,
@@ -88,11 +88,11 @@ def generate_c_code(dbc_file):
             fuzzer_source_name=None
         )
 
-        # gen_result to krotka. Pierwsze dwa elementy to zawsze header i source.
+        # Unpack results (first two are always header and source)
         header_content = gen_result[0]
         source_content = gen_result[1]
 
-        # 3. Zapis do plików
+        # 3. Write to files
         with open(GENERATED_DIR / f'{db_name}.h', 'w', encoding='utf-8') as f:
             f.write(header_content)
         with open(GENERATED_DIR / f'{db_name}.c', 'w', encoding='utf-8') as f:
@@ -101,7 +101,7 @@ def generate_c_code(dbc_file):
         update_metadata(dbc_file)
         return True
     except Exception as e:
-        print(f"❌ Błąd generowania {dbc_file.name}: {e}", file=sys.stderr)
+        print(f"[ERROR] Error generating {dbc_file.name}: {e}", file=sys.stderr)
         import traceback
         traceback.print_exc()
         return False
@@ -112,19 +112,26 @@ if __name__ == '__main__':
     print(f"--- CAN Code Generator ---")
     print(f"Backend: {backend}")
 
-    # Lista plików zależna od backendu
-    files_to_process = [BASE_DIR / 'PUTM_CAN_1.dbc']
+    # --- UPDATED FILE NAMES HERE ---
+    # File selection based on backend
+    
+    # 1. Main DBC file (Always included)
+    # Old: PUTM_CAN_1.dbc -> New: PUTM_CAN_M.dbc
+    files_to_process = [BASE_DIR / 'PUTM_CAN_M.dbc']
+    
     if backend == "ROS2":
-        files_to_process.append(BASE_DIR / 'PUTM_CAN_2.dbc')
+        # 2. Powertrain/Inverter DBC file (Only for ROS2)
+        # Old: PUTM_CAN_2.dbc -> New: PUTM_CAN_PT.dbc
+        files_to_process.append(BASE_DIR / 'PUTM_CAN_PT.dbc')
 
     for dbc_path in files_to_process:
         if not dbc_path.exists():
-            print(f"❌ BŁĄD: Nie znaleziono {dbc_path.name}")
+            print(f"[ERROR] File not found: {dbc_path.name}")
             continue
 
         if should_generate(dbc_path):
-            print(f"⚙️ Generowanie kodu dla {dbc_path.name}...")
+            print(f"[GEN] Generating code for {dbc_path.name}...")
             if generate_c_code(dbc_path):
-                print(f"✅ Sukces: {dbc_path.stem}.c/h")
+                print(f"[OK] Success: {dbc_path.stem}.c/h")
         else:
-            print(f"✅ {dbc_path.name} jest aktualny.")
+            print(f"[OK] {dbc_path.name} is up to date.")
