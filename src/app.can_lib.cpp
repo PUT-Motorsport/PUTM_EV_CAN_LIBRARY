@@ -5,13 +5,14 @@
 
 #include "app_can_lib.hpp"
 
-bool AppCAN::Init(FDCAN_HandleTypeDef* hfdcan) {
-    if (!hfdcan) return false;
+// Note: CanHandleType depends on the selected STM32 family (defined in stm32_hal_selector.hpp)
+bool AppCAN::Init(putm_ev_can::CanHandleType* hcan) {
+    if (!hcan) return false;
 
     // 1. Configure Hardware Layer
-    hal_.set_handle(hfdcan);
+    hal_.set_handle(hcan);
 
-    // 2. Configure Message Handler (Thread Safety for registration)
+    // 2. Configure Message Handler
     handler_.set_locking_mechanism(
         []() { __disable_irq(); },
         []() { __enable_irq(); }
@@ -26,22 +27,19 @@ bool AppCAN::Init(FDCAN_HandleTypeDef* hfdcan) {
         return false;
     }
 
-    // 4. Start Interface (Registers IRQ Callback and enables interrupts)
+    // 4. Start Interface
     return interface_.init();
 }
 
 void AppCAN::Poll() {
-    // 1. RX Processing is now fully interrupt-driven.
-    // interface_.process_received_messages(); // REMOVED
-
-    // 2. Handle Status LED (if configured)
+    // RX Processing is interrupt-driven.
+    // This function only handles the diagnostic LED.
     if (led_config_.enabled) {
         handle_status_led();
     }
 }
 
 void AppCAN::handle_status_led() {
-    // Retrieve current bus status from HAL
     auto status = hal_.get_bus_status();
     uint32_t now = HAL_GetTick();
     
@@ -50,7 +48,7 @@ void AppCAN::handle_status_led() {
         HAL_GPIO_WritePin(led_config_.port, led_config_.pin, GPIO_PIN_SET);
     }
     else if (status == PUTM_CAN::BusStatus::OK) {
-        // OK: Even Blink (1Hz -> 500ms ON / 500ms OFF)
+        // OK: Even Blink (1Hz)
         if ((now % 1000) < 500) {
             HAL_GPIO_WritePin(led_config_.port, led_config_.pin, GPIO_PIN_SET);
         } else {
@@ -58,11 +56,9 @@ void AppCAN::handle_status_led() {
         }
     }
     else {
-        // WARNING: Uneven Blink (Double flash every second)
-        // Pattern: ON(100) - OFF(100) - ON(100) - OFF(700)
+        // WARNING: Uneven Blink
         uint32_t cycle = now % 1000;
         bool state = false;
-        
         if (cycle < 100) state = true;
         else if (cycle < 200) state = false;
         else if (cycle < 300) state = true;
