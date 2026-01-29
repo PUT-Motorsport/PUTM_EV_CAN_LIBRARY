@@ -10,16 +10,22 @@ namespace putm_ev_can {
 
 // Implementation of the reception loop
 void DefaultCanInterface::process_received_messages() {
-    PUTM_CAN::CanFrame f;
-    
-    // Loop until RX queue is empty
-    while (hal_.receive(f)) {
-        // Pass received frame to the handler
+    // In Interrupt-Driven mode, this method is empty regarding RX.
+    // Messages are pushed directly from HAL ISR -> Handler.
+}
+
+bool DefaultCanInterface::init() {
+    // 1. Register the RX Callback (Lambda)
+    // This lambda will be executed inside the ISR context!
+    hal_.set_rx_callback([this](const PUTM_CAN::CanFrame& frame) {
         handler_.handle_message_with_default(
-            f.id,
-            std::span<const uint8_t>(f.data.data(), f.dlc)
+            frame.id,
+            std::span<const uint8_t>(frame.data.data(), frame.dlc)
         );
-    }
+    });
+
+    // 2. Initialize Hardware (Enables Interrupts)
+    return hal_.init();
 }
 
 } // namespace putm_ev_can

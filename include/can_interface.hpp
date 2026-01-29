@@ -144,7 +144,8 @@ public:
     DefaultCanInterface(PUTM_CAN::ICanHal& hal, MessageHandler& mh)
         : hal_(hal), handler_(mh) {}
 
-    bool init() override { return hal_.init(); }
+    // ZMIANA TUTAJ: Tylko deklaracja (Implementation is in .cpp)
+    bool init() override;
 
     void process_received_messages() override; 
 

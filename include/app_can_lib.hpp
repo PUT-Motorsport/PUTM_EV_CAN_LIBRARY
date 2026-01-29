@@ -41,7 +41,8 @@ public:
     bool Init(FDCAN_HandleTypeDef* hfdcan);
 
     /**
-     * @brief Polls for new messages and updates the status LED.
+     * @brief Polls for updates. 
+     * @note In interrupt mode, this only handles the diagnostic LED.
      * @details Call this cyclically in the main loop.
      */
     void Poll();
@@ -52,7 +53,7 @@ public:
      * - Steady ON: Bus Off (Error)
      * - 1Hz Blink: OK
      * - Irregular Blink: Warning (Bus Full/Error Passive)
-     * * @param port GPIO Port (e.g., GPIOA)
+     * @param port GPIO Port (e.g., GPIOA)
      * @param pin GPIO Pin (e.g., GPIO_PIN_5)
      */
     void ConfigStatusLed(GPIO_TypeDef* port, uint16_t pin) {
@@ -75,6 +76,7 @@ public:
 
     /**
      * @brief Registers a callback for a specific frame ID.
+     * @warning The callback will be executed in ISR context! Keep it short.
      * @param id Frame ID to listen for.
      * @param callback Function to handle the message.
      */

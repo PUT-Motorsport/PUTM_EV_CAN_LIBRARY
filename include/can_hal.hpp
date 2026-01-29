@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <array>
 #include <span> 
+#include <functional>
 
 namespace PUTM_CAN {
 
@@ -22,7 +23,7 @@ using CanId = uint32_t;
 
 /**
  * @brief Represents the current state of the CAN bus.
- * @note Added for LED status indication.
+ * @note Used for diagnostic LED indication.
  */
 enum class BusStatus {
     OK,      ///< Bus is operating normally (Error Active).
@@ -40,6 +41,12 @@ struct CanFrame {
 };
 
 /**
+ * @brief Callback function type for passing received frames up to the application layer.
+ * @details This function is called from the ISR context.
+ */
+using RxCallback = std::function<void(const CanFrame&)>;
+
+/**
  * @brief Simple mask-based CAN filter structure.
  */
 struct CanFilter {
@@ -51,7 +58,7 @@ struct CanFilter {
 
 /**
  * @brief Abstract HAL interface.
- * @details Inheriting classes must implement init, transmit, and receive methods.
+ * @details Inheriting classes must implement init, transmit, and set_rx_callback methods.
  */
 class ICanHal {
 public:
@@ -71,16 +78,13 @@ public:
     virtual bool transmit(const CanFrame& frame) = 0;
 
     /**
-     * @brief Receives a CAN frame (non-blocking).
-     * @param[out] frame Reference to a structure where received data will be stored.
-     * @return true if a new frame was read, false if no data available.
+     * @brief polling receive method.
+     * @note In Interrupt-Driven mode, this might be unused or used for manual retrieval.
      */
     virtual bool receive(CanFrame& frame) = 0;
     
     /**
      * @brief Configures hardware filters.
-     * @param filters Span of filter structures to be applied.
-     * @return true if configuration was successful.
      */
     virtual bool configure_filters(std::span<const CanFilter> filters) { return true; }
 
@@ -92,9 +96,14 @@ public:
     /**
      * @brief Retrieves the current diagnostic status of the bus.
      * @return Current BusStatus (OK, WARNING, or BUS_OFF).
-     * @note Default implementation returns OK to satisfy interface requirements if not implemented.
      */
     virtual BusStatus get_bus_status() const { return BusStatus::OK; }
+
+    /**
+     * @brief Registers a function to be called immediately when IRQ occurs.
+     * @param callback The function to handle the new frame.
+     */
+    virtual void set_rx_callback(RxCallback callback) = 0;
 };
 
 } // namespace PUTM_CAN

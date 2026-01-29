@@ -11,7 +11,7 @@ bool AppCAN::Init(FDCAN_HandleTypeDef* hfdcan) {
     // 1. Configure Hardware Layer
     hal_.set_handle(hfdcan);
 
-    // 2. Configure Message Handler (Thread Safety)
+    // 2. Configure Message Handler (Thread Safety for registration)
     handler_.set_locking_mechanism(
         []() { __disable_irq(); },
         []() { __enable_irq(); }
@@ -26,13 +26,13 @@ bool AppCAN::Init(FDCAN_HandleTypeDef* hfdcan) {
         return false;
     }
 
-    // 4. Start Interface
+    // 4. Start Interface (Registers IRQ Callback and enables interrupts)
     return interface_.init();
 }
 
 void AppCAN::Poll() {
-    // 1. Process RX queue
-    interface_.process_received_messages();
+    // 1. RX Processing is now fully interrupt-driven.
+    // interface_.process_received_messages(); // REMOVED
 
     // 2. Handle Status LED (if configured)
     if (led_config_.enabled) {

@@ -1,17 +1,75 @@
 /**
  * @file can_hal_stm32.cpp
- * @brief Implementation of STM32G4 FDCAN HAL.
+ * @brief Implementation of STM32G4 FDCAN HAL with Interrupt Dispatching.
  */
 
 #include "PUTM_EV_CAN_LIBRARY/include/can_hal_stm32.hpp"
 
+// --- GLOBAL C INTERRUPT HANDLER ---
+extern "C" void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs) {
+    // Route execution to the C++ static dispatcher
+    if ((RxFifo0ITs & FDCAN_IT_RX_FIFO0_NEW_MESSAGE) != 0) {
+        putm_ev_can::Stm32CanHal::process_global_irq(hfdcan);
+    }
+}
+// ----------------------------------
+
 namespace putm_ev_can {
+
+// Initialize static registry to nulls
+Stm32CanHal* Stm32CanHal::registry_[MAX_INSTANCES] = {nullptr, nullptr, nullptr};
+
+void Stm32CanHal::set_handle(FDCAN_HandleTypeDef* hfdcan) {
+    hfdcan_ = hfdcan;
+    register_instance();
+}
+
+void Stm32CanHal::register_instance() {
+    // Prevent duplicate registration
+    for (auto* entry : registry_) {
+        if (entry == this) return;
+    }
+    // Find empty slot
+    for (auto& entry : registry_) {
+        if (entry == nullptr) {
+            entry = this;
+            return;
+        }
+    }
+}
+
+void Stm32CanHal::process_global_irq(FDCAN_HandleTypeDef* h) {
+    // Find which C++ object owns this handle
+    for (auto* instance : registry_) {
+        if (instance && instance->hfdcan_ == h) {
+            instance->process_irq_read();
+            return;
+        }
+    }
+}
+
+void Stm32CanHal::process_irq_read() {
+    if (!hfdcan_ || !rx_callback_) return;
+
+    PUTM_CAN::CanFrame frame;
+    FDCAN_RxHeaderTypeDef rx_header;
+
+    // Drain the FIFO (Standard depth is 3 messages)
+    while (HAL_FDCAN_GetRxMessage(hfdcan_, FDCAN_RX_FIFO0, &rx_header, frame.data.data()) == HAL_OK) {
+        frame.id = rx_header.Identifier;
+        frame.dlc = dlc_to_bytes(rx_header.DataLength);
+        
+        // Invoke the registered callback (propagates to MessageHandler)
+        rx_callback_(frame);
+    }
+}
 
 bool Stm32CanHal::init() {
     if (!hfdcan_) return false;
 
     if (HAL_FDCAN_Start(hfdcan_) != HAL_OK) return false;
     
+    // Enable "New Message" Interrupt for FIFO 0
     if (HAL_FDCAN_ActivateNotification(hfdcan_, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK) {
         return false;
     }
@@ -50,10 +108,9 @@ bool Stm32CanHal::transmit(const PUTM_CAN::CanFrame& frame) {
 }
 
 bool Stm32CanHal::receive(PUTM_CAN::CanFrame& frame) {
+    // Manual receive is mostly unused in Interrupt mode, but kept for compatibility
     if (!initialized_ || !hfdcan_) return false;
-
     FDCAN_RxHeaderTypeDef rx{};
-    
     if (HAL_FDCAN_GetRxMessage(hfdcan_, FDCAN_RX_FIFO0, &rx, frame.data.data()) == HAL_OK) {
         frame.id = rx.Identifier;
         frame.dlc = dlc_to_bytes(rx.DataLength);
@@ -64,7 +121,6 @@ bool Stm32CanHal::receive(PUTM_CAN::CanFrame& frame) {
 
 bool Stm32CanHal::configure_filters(std::span<const PUTM_CAN::CanFilter> filters) {
     if (!hfdcan_) return false;
-
     uint32_t idx = 0;
     for (const auto& f : filters) {
         FDCAN_FilterTypeDef fd{};
@@ -74,28 +130,19 @@ bool Stm32CanHal::configure_filters(std::span<const PUTM_CAN::CanFilter> filters
         fd.FilterConfig = (f.fifo == 1) ? FDCAN_FILTER_TO_RXFIFO1 : FDCAN_FILTER_TO_RXFIFO0;
         fd.FilterID1 = f.id;
         fd.FilterID2 = f.mask;
-        
         if (HAL_FDCAN_ConfigFilter(hfdcan_, &fd) != HAL_OK) return false;
     }
-    
     return true;
 }
 
 PUTM_CAN::BusStatus Stm32CanHal::get_bus_status() const {
     if (!hfdcan_) return PUTM_CAN::BusStatus::BUS_OFF;
-
     FDCAN_ProtocolStatusTypeDef status;
     if (HAL_FDCAN_GetProtocolStatus(hfdcan_, &status) != HAL_OK) {
         return PUTM_CAN::BusStatus::BUS_OFF;
     }
-
-    if (status.BusOff) {
-        return PUTM_CAN::BusStatus::BUS_OFF;
-    }
-    if (status.ErrorPassive || status.Warning) {
-        return PUTM_CAN::BusStatus::WARNING;
-    }
-
+    if (status.BusOff) return PUTM_CAN::BusStatus::BUS_OFF;
+    if (status.ErrorPassive || status.Warning) return PUTM_CAN::BusStatus::WARNING;
     return PUTM_CAN::BusStatus::OK;
 }
 
