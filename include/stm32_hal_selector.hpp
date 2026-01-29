@@ -9,42 +9,51 @@
 #define STM32_HAL_SELECTOR_HPP
 
 /* * Detect STM32 Family based on compiler definitions.
- * We check for generic family macros (STM32G4xx) AND specific part macros (STM32G484xx)
+ * We check for generic family macros (STM32G4xx) AND specific part macros (e.g. STM32G473xx)
  * to ensure compatibility with different build systems (CMake, CubeIDE, Makefile).
  */
 
-#if defined(STM32G4) || defined(STM32G4xx) || defined(STM32G431xx) || defined(STM32G474xx) || defined(STM32G484xx)
+// --- STM32 G4 Family (FDCAN) ---
+#if defined(STM32G4) || defined(STM32G4xx) || \
+    defined(STM32G431xx) || defined(STM32G441xx) || \
+    defined(STM32G471xx) || defined(STM32G473xx) || defined(STM32G474xx) || \
+    defined(STM32G483xx) || defined(STM32G484xx)
+    
     #include "stm32g4xx_hal.h"
-    #define PUTM_USE_FDCAN 1  ///< FDCAN Peripheral used (G4)
+    #define PUTM_USE_FDCAN 1
 
+// --- STM32 H7 Family (FDCAN) ---
 #elif defined(STM32H7) || defined(STM32H7xx)
     #include "stm32h7xx_hal.h"
-    #define PUTM_USE_FDCAN 1  ///< FDCAN Peripheral used (H7)
+    #define PUTM_USE_FDCAN 1
 
+// --- STM32 L5 Family (FDCAN) ---
 #elif defined(STM32L5) || defined(STM32L5xx)
     #include "stm32l5xx_hal.h"
-    #define PUTM_USE_FDCAN 1  ///< FDCAN Peripheral used (L5)
+    #define PUTM_USE_FDCAN 1
 
+// --- STM32 L4 Family (bxCAN) ---
 #elif defined(STM32L4) || defined(STM32L4xx)
     #include "stm32l4xx_hal.h"
-    #define PUTM_USE_BXCAN 1  ///< Classic bxCAN used (L4)
+    #define PUTM_USE_BXCAN 1
 
+// --- STM32 F4 Family (bxCAN) ---
 #elif defined(STM32F4) || defined(STM32F4xx)
     #include "stm32f4xx_hal.h"
-    #define PUTM_USE_BXCAN 1  ///< Classic bxCAN used (F4)
+    #define PUTM_USE_BXCAN 1
 
+// --- STM32 F7 Family (bxCAN) ---
 #elif defined(STM32F7) || defined(STM32F7xx)
     #include "stm32f7xx_hal.h"
-    #define PUTM_USE_BXCAN 1  ///< Classic bxCAN used (F7)
+    #define PUTM_USE_BXCAN 1
 
+// --- STM32 F1 Family (bxCAN) ---
 #elif defined(STM32F1) || defined(STM32F1xx)
     #include "stm32f1xx_hal.h"
-    #define PUTM_USE_BXCAN 1  ///< Classic bxCAN used (F1)
+    #define PUTM_USE_BXCAN 1
 
 #else
-    // Jeśli kompilator tutaj dotrze, oznacza to brak zdefiniowanego MCU w CMake/IDE.
-    // Sprawdź flagi preprocesora (C/C++ Compiler -> Preprocessor -> Defined symbols).
-    #error "PUTM CAN LIB: Unknown STM32 Family! Ensure your build system defines the MCU series (e.g. -DSTM32G4xx or -DSTM32G484xx)."
+    #error "PUTM CAN LIB: Unknown STM32 Family! Check your preprocessor defines (e.g. STM32G473xx)."
 #endif
 
 namespace putm_ev_can {
