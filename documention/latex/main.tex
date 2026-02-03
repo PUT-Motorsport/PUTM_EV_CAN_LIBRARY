@@ -71,6 +71,15 @@
     language=C++
 }
 
+% Styl kodu Bash
+\lstdefinestyle{bashstyle}{
+    backgroundcolor=\color{backcolour},   
+    basicstyle=\ttfamily\footnotesize,
+    breaklines=true,                 
+    captionpos=b,
+    frame=single
+}
+
 \lstset{style=cppstyle}
 
 % Metadane dokumentu
@@ -83,10 +92,46 @@
 \maketitle
 
 \begin{abstract}
-Niniejszy dokument stanowi instrukcję obsługi biblioteki \texttt{PUTM\_EV\_CAN\_LIBRARY}. Biblioteka została zaprojektowana dla systemów wbudowanych (STM32) oraz środowiska ROS2, kładąc nacisk na statyczną alokację pamięci (Zero-Allocation), bezpieczeństwo typów (C++20) oraz automatyczną obsługę ramek DBC. Dokument definiuje również obowiązującą w zespole konwencję nazewnictwa magistral CAN.
+Niniejszy dokument stanowi instrukcję obsługi biblioteki \texttt{PUTM\_EV\_CAN\_LIBRARY}. Biblioteka została zaprojektowana dla systemów wbudowanych (STM32) oraz środowiska ROS2. Główne cechy to: statyczna alokacja pamięci, obsługa wielu rodzin STM32 (F4, G4, L4, H7) dzięki warstwie abstrakcji HAL, odbiór danych oparty na przerwaniach (Interrupt-Driven) oraz wbudowana diagnostyka LED.
 \end{abstract}
 
 \tableofcontents
+\newpage
+
+\section{Wymagania systemowe i zależności}
+
+Prawidłowa kompilacja i działanie biblioteki \texttt{PUTM\_EV\_CAN\_LIBRARY} wymaga zapewnienia odpowiedniego środowiska programistycznego. Poniższa tabela przedstawia minimalne wersje narzędzi oraz bibliotek wykorzystywanych w projekcie.
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{|l|l|p{6cm}|}
+\hline
+\textbf{Narzędzie / Biblioteka} & \textbf{Wersja Minimalna} & \textbf{Uwagi} \\ \hline
+CMake & 3.16 & Wymagane przez konfigurację projektu. \\ \hline
+Standard C++ & C++20 & Wymuszone w pliku \texttt{CMakeLists.txt}. \\ \hline
+Standard C & C11 & Standard dla kodu C. \\ \hline
+Python & 3.8+ & Niezbędny do uruchomienia skryptów generujących kod z DBC. \\ \hline
+Kompilator C++ (ARM) & GCC $\ge$ 10.0 & Musi obsługiwać flagi standardu C++20 (np. \texttt{arm-none-eabi-gcc}). \\ \hline
+Biblioteka HAL & STM32XXxx HAL & Zależność sprzętowa dla mikrokontrolerów różnych serii. \\ \hline
+\textbf{Python: \texttt{cantools}} & \textbf{40.7.1} & \textbf{Generator kodu C z plików DBC.} \\ \hline
+Python: \texttt{python-can} & (auto) & Instalowana automatycznie jako zależność \texttt{cantools}. \\ \hline
+\end{tabular}
+\caption{Wymagania systemowe projektu}
+\label{tab:wymagania}
+\end{table}
+
+\subsection{Instalacja zależności Python}
+
+Skrypt generujący kod (\texttt{dbc/setup.py}) jest uruchamiany automatycznie przez CMake i wymaga zainstalowanych bibliotek w środowisku Pythona. Biblioteka \texttt{cantools} w wersji 40.7.1 pociąga za sobą wymagane zależności (m.in. \texttt{python-can}, \texttt{bitstruct}).
+
+Aby zainstalować wymagane pakiety, zaleca się użycie poniższego polecenia w terminalu:
+
+\begin{lstlisting}[style=bashstyle, caption=Instalacja wymaganych bibliotek Python]
+pip install cantools==40.7.1
+\end{lstlisting}
+
+Brak tych bibliotek spowoduje błąd konfiguracji CMake na etapie \texttt{Checking and regenerating DBC files}.
+
 \newpage
 
 \section{Integracja i Konfiguracja w CMake}
@@ -108,7 +153,7 @@ target_link_libraries(twoj_projekt PRIVATE putm_ev_can)
 
 \subsection{Wybór konfiguracji (STM32 vs ROS2)}
 
-Biblioteka wspiera dwa backhendy sprzętowe. Wybór następuje poprzez ustawienie zmiennej \texttt{PUTM\_BACKEND} **przed** wywołaniem \texttt{add\_subdirectory}.
+Biblioteka wspiera dwa backhendy sprzętowe. Wybór następuje poprzez ustawienie zmiennej \texttt{PUTM\_BACKEND} \textbf{przed} wywołaniem \texttt{add\_subdirectory}.
 
 \subsubsection{Konfiguracja dla STM32}
 Jest to domyślna konfiguracja. Wymaga ona, aby w projekcie dostępna była biblioteka HAL.
@@ -132,7 +177,7 @@ Domyślnie biblioteka pracuje w trybie Classic CAN. Aby włączyć obsługę ram
 \begin{lstlisting}[style=cmakestyle]
 option(PUTM_USE_CAN_FD "Enable CAN FD" ON)
 \end{lstlisting}
-
+\newpage
 \section{Konwencja Nomenklatury Magistral}
 
 W projekcie pojazdu zdefiniowano trzy fizyczne magistrale CAN. Aby zachować spójność w kodzie (na STM32 i w ROS2), \textbf{należy bezwzględnie} stosować poniższe nazewnictwo instancji klasy \texttt{AppCAN}.
@@ -168,34 +213,63 @@ AppCAN can_dv;  // Driverless Bus
 \end{lstlisting}
 
 \subsection{Krok 2: Wywołanie Init}
-Inicjalizację należy przeprowadzić wewnątrz funkcji \texttt{main()}, \textbf{po} konfiguracji peryferiów przez CubeMX. Każdej instancji przypisujemy odpowiedni uchwyt sprzętowy (\texttt{hfdcanX}).
+Inicjalizację należy przeprowadzić wewnątrz funkcji \texttt{main()}, \textbf{po} konfiguracji peryferiów przez CubeMX. Każdej instancji przypisujemy odpowiedni uchwyt sprzętowy (\texttt{hfdcanX} lub \texttt{hcanX}).
 
 \begin{lstlisting}
 /* USER CODE BEGIN 2 */
 
-// 1. Inicjalizacja Main CAN (zazwyczaj FDCAN1)
+// 1. Inicjalizacja Main CAN (np. FDCAN1)
 if (!can_m.Init(&hfdcan1)) {
     Error_Handler(); // Blad inicjalizacji Main
 }
 
-// 2. Inicjalizacja Powertrain CAN (zazwyczaj FDCAN2)
+// 2. Inicjalizacja Powertrain CAN (np. FDCAN2)
 if (!can_pt.Init(&hfdcan2)) {
     Error_Handler(); // Blad inicjalizacji PT
 }
-
-// 3. Inicjalizacja Driverless CAN (zazwyczaj FDCAN3)
-if (!can_dv.Init(&hfdcan3)) {
-    Error_Handler(); // Blad inicjalizacji DV
-}
-
 /* USER CODE END 2 */
 \end{lstlisting}
 
-\textbf{Uwaga:} Należy zweryfikować w konfiguracji CubeMX, który \texttt{hfdcanX} odpowiada fizycznie której magistrali na PCB.
+\textbf{Uwaga:} Biblioteka automatycznie wykrywa rodzinę procesora (np. G4 vs F4) i dostosowuje typ uchwytu (FDCAN vs bxCAN).
 
+\section{Diagnostyka LED}
+
+Biblioteka posiada wbudowany mechanizm automatycznej sygnalizacji stanu magistrali za pomocą diody LED. Funkcjonalność ta pozwala na szybką diagnostykę problemów (np. odpięta wtyczka, uszkodzona magistrala, błędy ramek) bez konieczności podłączania debuggera.
+
+\subsection{Konfiguracja Diody}
+Dla każdej instancji \texttt{AppCAN} (np. \texttt{can\_m}, \texttt{can\_pt}) można przypisać osobną diodę. Konfigurację należy wykonać \textbf{raz}, zaraz po pomyślnej inicjalizacji biblioteki.
+
+\begin{lstlisting}
+if (can_m.Init(&hfdcan1)) {
+    // Przypisanie diody (np. LED1) do tej magistrali
+    can_m.ConfigStatusLed(LED1_GPIO_Port, LED1_Pin);
+}
+\end{lstlisting}
+
+\subsection{Znaczenie Sygnałów (Mruganie)}
+Po skonfigurowaniu, biblioteka automatycznie steruje diodą wewnątrz metody \texttt{Poll()}. Użytkownik nie musi (i nie powinien) ręcznie sterować tymi pinami.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Zachowanie Diody} & \textbf{Stan Magistrali} & \textbf{Opis} \\ \midrule
+\textbf{Mruganie 1 Hz} & \textbf{OK} & Magistrala działa poprawnie (Error Active). \\
+(500ms ON, 500ms OFF) & & Komunikacja jest możliwa. \\ \midrule
+\textbf{Nierówne Mruganie} & \textbf{WARNING} & Wykryto błędy transmisji (Error Passive / Warning). \\
+(Podwójny błysk co 1s) & & Może oznaczać zakłócenia lub błędy ramek. \\ \midrule
+\textbf{Świeci Ciągle} & \textbf{BUS OFF} & Krytyczny błąd magistrali. \\
+(Solid ON) & & Kontroler CAN odłączył się od sieci (np. zwarcie). \\ \bottomrule
+\end{tabular}
+\caption{Kody diagnostyczne diody statusowej}
+\label{tab:led_codes}
+\end{table}
+
+
+\newpage
 \section{Wysyłanie danych (TX)}
 
-Wysyłanie odbywa się poprzez metodę \texttt{Send} wywołaną na odpowiedniej instancji magistrali (zazwyczaj \texttt{can\_m}).
+Wysyłanie odbywa się poprzez metodę \texttt{Send} wywołaną na odpowiedniej instancji magistrali (zazwyczaj \texttt{can\_m}). Pamiętaj o używaniu poprawnego prefiksu \texttt{PUTM\_CAN\_M\_} (lub innego, zależnie od pliku DBC).
 
 \begin{lstlisting}
 // Przyklad w petli glownej (co 100ms)
@@ -203,58 +277,58 @@ if (HAL_GetTick() - last_tx > 100) {
     last_tx = HAL_GetTick();
 
     // 1. Tworzenie i zerowanie struktury
-    PUTM_CAN_1_pc_main_data_t tx_msg = {0};
+    PUTM_CAN_M_pc_main_data_t tx_msg = {0};
 
     // 2. Wypelnianie danych
     tx_msg.vehicle_speed = 125;
     tx_msg.inverters_ready = 1;
     
     // 3. Wyslanie na magistrale MAIN (can_m)
-    if (can_m.Send(PUTM_CAN_1_PC_MAIN_DATA_FRAME_ID, tx_msg)) {
-        HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin); // Potwierdzenie TX
+    if (can_m.Send(PUTM_CAN_M_PC_MAIN_DATA_FRAME_ID, tx_msg)) {
+        // Opcjonalnie: dodatkowa logika po wyslaniu
     }
 }
 \end{lstlisting}
 
-Jeśli dane (np. sterowanie falownikiem) mają trafić na magistralę Powertrain, używamy obiektu \texttt{can\_pt}:
-\begin{lstlisting}
-can_pt.Send(PUTM_CAN_1_AMK_SETPOINTS_FRAME_ID, amk_msg);
-\end{lstlisting}
-
+\newpage
 \section{Odbieranie danych (RX)}
 
-Odbiór wymaga rejestracji callbacków dla konkretnych instancji magistral oraz cyklicznego odpytywania (polling).
+Odbiór w nowej wersji biblioteki działa w trybie \textbf{Interrupt-Driven (Przerwania)}. Oznacza to, że dane są pobierane natychmiast po ich nadejściu, a nie w pętli głównej.
 
 \subsection{Krok 1: Rejestracja Callbacku}
-Rejestrację wykonujemy raz, przed pętlą główną. Należy zdecydować, z której magistrali spodziewamy się danej ramki.
+Rejestrację wykonujemy raz, przed pętlą główną.
+\textbf{OSTRZEŻENIE:} Funkcja lambda (callback) jest wywoływana w kontekście przerwania sprzętowego (ISR). Należy w niej unikać:
+\begin{itemize}
+    \item Funkcji blokujących (\texttt{HAL\_Delay}).
+    \item Długich operacji matematycznych.
+    \item Funkcji wejścia/wyjścia (np. \texttt{printf}).
+\end{itemize}
+Zaleca się jedynie ustawianie flag, zmiennych \texttt{volatile} lub szybkie sterowanie pinami.
 
 \begin{lstlisting}
-// Odbior danych z Main CAN (np. input od kierowcy)
-can_m.RegisterCallback<PUTM_CAN_1_driver_input_t>(
-    PUTM_CAN_1_DRIVER_INPUT_FRAME_ID,
-    [](const PUTM_CAN_1_driver_input_t& msg) {
-        // Logika obslugi (wywolywana automatycznie)
-        if (msg.pedal_position > 1000) {
-            // ...
+// Odbior danych z Main CAN
+can_m.RegisterCallback<PUTM_CAN_M_rearbox_safety_t>(
+    PUTM_CAN_M_REARBOX_SAFETY_FRAME_ID,
+    [](const PUTM_CAN_M_rearbox_safety_t& msg) {
+        
+        // Ta funkcja wykonuje sie w PRZERWANIU!
+        // Przyklad bezpiecznej operacji: sterowanie LED
+        if (msg.safety_tsmp == 1) {
+             HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_RESET);
+        } else {
+             HAL_GPIO_WritePin(LED3_GPIO_Port, LED3_Pin, GPIO_PIN_SET);
         }
-    }
-);
-
-// Odbior danych z Powertrain CAN (np. status falownika)
-can_pt.RegisterCallback<PUTM_CAN_1_amk_actual_values_1_t>(
-    PUTM_CAN_1_AMK_ACTUAL_VALUES_1_FRAME_ID,
-    [](const PUTM_CAN_1_amk_actual_values_1_t& msg) {
-        // ...
     }
 );
 \end{lstlisting}
 
 \subsection{Krok 2: Polling w pętli głównej}
-W pętli nieskończonej należy obsługiwać \textbf{wszystkie} aktywne instancje.
+Mimo że odbiór danych jest asynchroniczny, metoda \texttt{Poll()} nadal musi być wywoływana. Jej zadaniem jest teraz obsługa \textbf{diody diagnostycznej}.
 
 \begin{lstlisting}
 while (1) {
-    // Obsluga buforow wszystkich magistral
+    // Obsluga mrugania dioda diagnostyczna
+    // (Odbior ramek dzieje sie automatycznie w tle)
     can_m.Poll();
     can_pt.Poll();
     can_dv.Poll();
@@ -266,23 +340,47 @@ while (1) {
 \section{Najczęściej popełniane błędy}
 
 \begin{itemize}
-    \item \textbf{Pomylenie instancji:} Wysłanie wiadomości na \texttt{can\_m} zamiast \texttt{can\_pt}, przez co falownik jej nie otrzyma (separacja fizyczna sieci).
-    \item \textbf{Brak wywołania \texttt{Poll()} dla jednej z instancji:} Skutkuje przepełnieniem bufora sprzętowego na tej magistrali i brakiem wywołań callbacków.
-    \item \textbf{Zła konfiguracja zegarów FDCAN:} Jeśli \texttt{Init()} zwraca \texttt{false}, sprawdź Clock Configuration w CubeMX.
-    \item \textbf{Brak inicjalizacji struktury zerami:} Zawsze używaj \texttt{Typ zmienna = \{0\};}.
+    \item \textbf{Użycie złego prefiksu:} Biblioteka teraz używa \texttt{PUTM\_CAN\_M\_} (dla Main DBC). Użycie starego \texttt{PUTM\_CAN\_1\_} spowoduje błąd kompilacji.
+    \item \textbf{Brak słowa \texttt{volatile}:} Jeśli zmienna jest modyfikowana w callbacku (RX) i czytana w \texttt{main()}, musi być oznaczona jako \texttt{volatile}, inaczej kompilator może ją źle zoptymalizować.
+    \item \textbf{Pomylenie instancji:} Wysłanie wiadomości na \texttt{can\_m} zamiast \texttt{can\_pt}, przez co falownik jej nie otrzyma.
+    \item \textbf{Brak wywołania \texttt{Poll()}:} Skutkuje brakiem sygnalizacji LED (dioda nie będzie mrugać mimo poprawnej pracy).
 \end{itemize}
 
-\section{Opis plików biblioteki}
 
-Biblioteka składa się z kilku warstw abstrakcji:
+\newpage
+\section{Szczegółowa Architektura Systemu}
 
-\begin{enumerate}
-    \item \textbf{\texttt{app\_can\_lib.hpp / .cpp}} -- \textbf{Fasada}. Klasa \texttt{AppCAN}. To tutaj tworzymy instancje \texttt{can\_m}, \texttt{can\_pt}, \texttt{can\_dv}.
-    \item \textbf{\texttt{can\_hal.hpp}} -- \textbf{Abstrakcja Sprzętowa}. Interfejs \texttt{ICanHal}.
-    \item \texttt{\textbf{can\_hal\_stm32.hpp / .cpp}} -- \textbf{Implementacja STM32}. Obsługa rejestrów FDCAN.
-    \item \textbf{\texttt{message\_handler.hpp}} -- \textbf{Router}. Zarządza callbackami.
-    \item \textbf{\texttt{can\_interface.hpp}} -- \textbf{Logika DBC}. Rejestr ramek.
-    \item \textbf{\texttt{dbc/generated/PUTM\_CAN\_1.h}} -- \textbf{Definicje}. Wygenerowane struktury C.
-\end{enumerate}
+Biblioteka została zaprojektowana w oparciu o wzorzec projektowy \textit{Fasada} (Facade) oraz \textit{Wstrzykiwanie Zależności}. Architektura jest podzielona na cztery główne warstwy.
+
+\begin{figure}[H]
+    \centering
+    % Miejsce na diagram (np. wygenerowany z Mermaid)
+    % \includegraphics[width=0.9\textwidth]{architecture.png}
+    \caption{Diagram warstwowy biblioteki}
+\end{figure}
+
+\subsection{Warstwa 1: Fasada Aplikacji (\texttt{app\_can\_lib})}
+Jest to jedyna warstwa, z którą bezpośrednio intereaguje użytkownik końcowy.
+\begin{itemize}
+    \item \textbf{Odpowiedzialność:} Ukrywa złożoność wewnętrzną, zarządza czasem życia obiektów i obsługuje diagnostykę LED w metodzie \texttt{Poll()}.
+\end{itemize}
+
+\subsection{Warstwa 2: Logika i Routing}
+\subsubsection{Interfejs (\texttt{can\_interface})}
+Rejestruje callback odbiorczy w warstwie HAL. Gdy przyjdzie przerwanie, HAL przekazuje surowe dane tutaj, a interfejs pakuje je w struktury C++ (korzystając z DBC).
+
+\subsubsection{Router (\texttt{message\_handler})}
+Przechowuje listę callbacków użytkownika. Zapewnia bezpieczeństwo wątkowe przy rejestracji nowych funkcji.
+
+\subsection{Warstwa 3: Abstrakcja Sprzętowa HAL (\texttt{can\_hal})}
+Warstwa izolująca kod od sprzętu. Została znacznie rozbudowana w nowej wersji.
+
+\begin{itemize}
+    \item \textbf{Selektor (\texttt{stm32\_hal\_selector.hpp}):} Automatycznie wykrywa rodzinę procesora (np. G484xx) i dołącza odpowiednie nagłówki HAL. Definiuje typ \texttt{CanHandleType} (FDCAN dla G4/H7, bxCAN dla F4/L4).
+    \item \textbf{Dispatcher Przerwań:} Klasa \texttt{Stm32CanHal} posiada statyczną tablicę, która mapuje uchwyty sprzętowe na obiekty C++. Pozwala to globalnej funkcji przerwania C (\texttt{HAL\_FDCAN\_RxFifo0Callback}) odnaleźć właściwą instancję biblioteki i przekazać jej dane.
+\end{itemize}
+
+\subsection{Warstwa 4: Definicje Danych (\texttt{dbc/generated})}
+Kod generowany automatycznie przez skrypt Python na podstawie plików \texttt{.dbc}. Zawiera definicje struktur (np. \texttt{PUTM\_CAN\_M\_bms\_lv\_main\_t}) oraz funkcje pakujące.
 
 \end{document}
