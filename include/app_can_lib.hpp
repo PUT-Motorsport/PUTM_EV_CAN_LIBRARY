@@ -1,86 +1,84 @@
 /**
  * @file app_can_lib.hpp
- * @brief User-friendly Facade for the CAN library (STM32 Cross-Family Compatible).
- * @author PUT Motorsport
+ * @brief User-friendly Facade for the CAN library (STM32 & ROS2 Compatible).
  */
 
 #ifndef APP_CAN_LIB_HPP
 #define APP_CAN_LIB_HPP
 
-#include "PUTM_EV_CAN_LIBRARY/include/stm32_hal_selector.hpp"
 #include "PUTM_CAN_M.h"
 #include <functional>
 #include <array>
 
+// --- BACKEND SELECTION ---
+#if defined(PUTM_CAN_BACKEND_STM32)
+    #include "PUTM_EV_CAN_LIBRARY/include/can_hal_stm32.hpp"
+    // Alias dla typu argumentu Init na STM32 (wskaźnik do uchwytu)
+    using HalType = putm_ev_can::Stm32CanHal;
+    using InitParamType = putm_ev_can::CanHandleType*; 
+
+#elif defined(PUTM_CAN_BACKEND_ROS2)
+    #include "PUTM_EV_CAN_LIBRARY/include/can_hal_ros2.hpp"
+    #include <string>
+    // Alias dla typu argumentu Init na Linux/ROS (nazwa interfejsu np. "can0")
+    using HalType = putm_ev_can::SocketCanHal;
+    using InitParamType = const std::string&;
+
+#else
+    #error "PUTM CAN LIB: No backend defined! Use -DPUTM_CAN_BACKEND=STM32 or ROS2"
+#endif
+
 // Library components
 #include "PUTM_EV_CAN_LIBRARY/include/message_handler.hpp"
-#include "PUTM_EV_CAN_LIBRARY/include/can_hal_stm32.hpp"
 #include "PUTM_EV_CAN_LIBRARY/include/can_interface.hpp"
 
-/**
- * @brief Class representing a single physical CAN interface.
- * @note Create one instance per CAN peripheral.
- */
 class AppCAN {
 public:
     AppCAN() : interface_(hal_, handler_) {}
     
-    // Disable copying
     AppCAN(const AppCAN&) = delete;
     AppCAN& operator=(const AppCAN&) = delete;
 
     /**
-     * @brief Initializes this CAN instance.
-     * @param hcan Pointer to the HAL handle (e.g. &hfdcan1 for G4, &hcan1 for F4).
-     * @return true on success.
+     * @brief Initializes CAN interface.
+     * @param param STM32: &hfdcan1 | Linux: "can0"
      */
-    bool Init(putm_ev_can::CanHandleType* hcan);
+    bool Init(InitParamType param);
 
     /**
-     * @brief Polls for updates (mainly for Diagnostic LED).
-     * @details RX is handled by interrupts. Call this in main loop.
+     * @brief Main loop poll. Handles LED on STM32. Empty on Linux.
      */
     void Poll();
 
-    /**
-     * @brief Configures a GPIO pin to act as a status indicator.
-     */
-    void ConfigStatusLed(GPIO_TypeDef* port, uint16_t pin) {
-        led_config_.port = port;
-        led_config_.pin = pin;
-        led_config_.enabled = true;
-    }
+    // Funkcje diagnostyczne dostępne TYLKO na STM32
+#if defined(PUTM_CAN_BACKEND_STM32)
+    void ConfigStatusLed(GPIO_TypeDef* port, uint16_t pin);
+#endif
 
-    /**
-     * @brief Sends a CAN frame.
-     */
     template <typename MsgType>
     bool Send(uint32_t id, const MsgType& msg) {
         return interface_.send(id, msg);
     }
 
-    /**
-     * @brief Registers a callback for a specific frame ID.
-     */
     template <typename MsgType>
     void RegisterCallback(uint32_t id, std::function<void(const MsgType&)> callback) {
         handler_.register_callback<MsgType>(id, callback);
     }
 
 private:
-    struct StatusLedConfig {
-        GPIO_TypeDef* port = nullptr;
-        uint16_t pin = 0;
-        bool enabled = false;
-    };
-
     void handle_status_led();
 
-    putm_ev_can::Stm32CanHal hal_;
+    HalType hal_;
     putm_ev_can::MessageHandler handler_;
     putm_ev_can::DefaultCanInterface interface_;
     
-    StatusLedConfig led_config_;
+    struct StatusLedConfig {
+#if defined(PUTM_CAN_BACKEND_STM32)
+        GPIO_TypeDef* port = nullptr;
+#endif
+        uint16_t pin = 0;
+        bool enabled = false;
+    } led_config_;
 };
 
 #endif // APP_CAN_LIB_HPP

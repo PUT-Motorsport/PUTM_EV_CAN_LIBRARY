@@ -1,24 +1,34 @@
 /**
  * @file app_can_lib.cpp
- * @brief Implementation of the AppCAN facade.
+ * @brief Implementation of AppCAN facade for STM32 and ROS2.
  */
 
-#include "app_can_lib.hpp"
+#include "PUTM_EV_CAN_LIBRARY/include/app_can_lib.hpp"
 
-// Note: CanHandleType depends on the selected STM32 family (defined in stm32_hal_selector.hpp)
-bool AppCAN::Init(putm_ev_can::CanHandleType* hcan) {
-    if (!hcan) return false;
-
-    // 1. Configure Hardware Layer
-    hal_.set_handle(hcan);
-
-    // 2. Configure Message Handler
+// --- INIT IMPLEMENTATION ---
+bool AppCAN::Init(InitParamType param) {
+    
+    // 1. Konfiguracja Warstwy Sprzętowej (HAL)
+#if defined(PUTM_CAN_BACKEND_STM32)
+    if (!param) return false;
+    hal_.set_handle(param);
+    
+    // Na STM32 musimy blokować przerwania podczas rejestracji callbacków
     handler_.set_locking_mechanism(
         []() { __disable_irq(); },
         []() { __enable_irq(); }
     );
 
-    // 3. Configure Filters (Accept All)
+#elif defined(PUTM_CAN_BACKEND_ROS2)
+    // Na Linuxie inicjalizujemy socket (np. "can0")
+    if (!hal_.init(param)) return false;
+    
+    // Na Linuxie nie wyłączamy przerwań systemowych ;)
+    // Jeśli używasz wielu wątków w ROS, MessageHandler jest bezpieczny (ma własny mutex/lock)
+#endif
+
+    // 2. Konfiguracja Filtrów (Wspólna)
+    // Domyślnie: Akceptuj wszystko
     std::array<PUTM_CAN::CanFilter, 1> filters = {{
         { .id = 0, .mask = 0x000, .extended = false, .fifo = 0 }
     }};
@@ -27,28 +37,42 @@ bool AppCAN::Init(putm_ev_can::CanHandleType* hcan) {
         return false;
     }
 
-    // 4. Start Interface
+    // 3. Start Interfejsu (Włącza przerwania / Wątek RX)
     return interface_.init();
 }
 
+// --- POLL & LED IMPLEMENTATION ---
+
 void AppCAN::Poll() {
-    // RX Processing is interrupt-driven.
-    // This function only handles the diagnostic LED.
+#if defined(PUTM_CAN_BACKEND_STM32)
+    // Obsługa LED tylko na mikrokontrolerze
     if (led_config_.enabled) {
         handle_status_led();
     }
+#endif
+    // Na ROS2 ta metoda nic nie robi (jest pusta), 
+    // bo odbiór danych dzieje się w tle w wątku SocketCanHal.
 }
 
+#if defined(PUTM_CAN_BACKEND_STM32)
+void AppCAN::ConfigStatusLed(GPIO_TypeDef* port, uint16_t pin) {
+    led_config_.port = port;
+    led_config_.pin = pin;
+    led_config_.enabled = true;
+}
+#endif
+
 void AppCAN::handle_status_led() {
+#if defined(PUTM_CAN_BACKEND_STM32)
     auto status = hal_.get_bus_status();
     uint32_t now = HAL_GetTick();
     
     if (status == PUTM_CAN::BusStatus::BUS_OFF) {
-        // ERROR: Steady ON
+        // ERROR: Świeci ciągle
         HAL_GPIO_WritePin(led_config_.port, led_config_.pin, GPIO_PIN_SET);
     }
     else if (status == PUTM_CAN::BusStatus::OK) {
-        // OK: Even Blink (1Hz)
+        // OK: Mruga 1Hz (500ms ON / 500ms OFF)
         if ((now % 1000) < 500) {
             HAL_GPIO_WritePin(led_config_.port, led_config_.pin, GPIO_PIN_SET);
         } else {
@@ -56,14 +80,10 @@ void AppCAN::handle_status_led() {
         }
     }
     else {
-        // WARNING: Uneven Blink
+        // WARNING: Nierówne mruganie
         uint32_t cycle = now % 1000;
-        bool state = false;
-        if (cycle < 100) state = true;
-        else if (cycle < 200) state = false;
-        else if (cycle < 300) state = true;
-        else state = false;
-        
+        bool state = (cycle < 100) || (cycle > 200 && cycle < 300);
         HAL_GPIO_WritePin(led_config_.port, led_config_.pin, state ? GPIO_PIN_SET : GPIO_PIN_RESET);
     }
+#endif
 }
