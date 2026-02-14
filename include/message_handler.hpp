@@ -1,119 +1,88 @@
 /**
  * @file message_handler.hpp
- * @brief Message callback manager and router.
- * @details Optimized for embedded systems: uses a static array instead of the heap.
+ * @brief Thread-safe message routing logic.
  */
 
 #ifndef PUTM_EV_CAN_MESSAGE_HANDLER_HPP
 #define PUTM_EV_CAN_MESSAGE_HANDLER_HPP
 
 #include <functional>
-#include <span>
 #include <array>
-#include <algorithm>
-#include "can_interface.hpp" 
-#include "PUTM_CAN_M.h"
+#include <span>
+#include "can_hal.hpp"
+#include "PUTM_EV_CAN_LIBRARY/include/utils/critical_section.hpp"
 
 namespace putm_ev_can {
 
-// Import CanId from HAL namespace
-using PUTM_CAN::CanId;
+// Type definition for DBC entries (used by Driver and Handler)
+struct DbcEntry {
+    PUTM_CAN::CanId id;
+    uint8_t len;
+    void* pack;   
+    void* unpack; 
+};
 
-/**
- * @brief Maximum number of registered callbacks.
- */
-constexpr size_t MAX_CALLBACKS = 32;
+// External declaration (implementation provided by generated code)
+extern const DbcEntry* find_dbc_entry(PUTM_CAN::CanId id);
 
-/**
- * @brief Class managing message distribution to registered callbacks.
- */
 class MessageHandler {
 public:
-    MessageHandler() = default;
+    static constexpr size_t MAX_CALLBACKS = 32;
 
-    /**
-     * @brief Configures the interrupt locking mechanism.
-     * @param lock_fn Function to disable interrupts.
-     * @param unlock_fn Function to enable interrupts.
-     */
-    void set_locking_mechanism(std::function<void()> lock_fn, std::function<void()> unlock_fn) {
-        lock_fn_ = lock_fn;
-        unlock_fn_ = unlock_fn;
-    }
-
-    /**
-     * @brief Registers a callback for a specific ID.
-     * @return true if successful, false if MAX_CALLBACKS reached.
-     */
     template <typename MsgType>
-    bool register_callback(CanId id, std::function<void(const MsgType&)> callback) {
-        ScopedLock guard(*this);
+    bool register_callback(PUTM_CAN::CanId id, std::function<void(const MsgType&)> callback) {
+        LockGuard lock(protection_); // Thread/IRQ Safe
         
-        // 1. Update existing
+        // 1. Update existing slot
         for (auto& entry : callbacks_) {
             if (entry.active && entry.id == id) {
-                entry.callback = [id, callback](std::span<const uint8_t> data) {
-                    MsgType msg{};
-                    if (decode_to_message<MsgType>(id, data, msg)) {
-                        callback(msg);
-                    }
-                };
+                entry.callback = create_unpacker<MsgType>(id, callback);
                 return true;
             }
         }
 
-        // 2. Find empty slot
+        // 2. Find new empty slot
         for (auto& entry : callbacks_) {
             if (!entry.active) {
                 entry.id = id;
                 entry.active = true;
-                entry.callback = [id, callback](std::span<const uint8_t> data) {
-                    MsgType msg{};
-                    if (decode_to_message<MsgType>(id, data, msg)) {
-                        callback(msg);
-                    }
-                };
+                entry.callback = create_unpacker<MsgType>(id, callback);
                 return true;
             }
         }
         return false; 
     }
 
-    void handle_message_with_default(CanId id, std::span<const uint8_t> data);
+    void handle_message(PUTM_CAN::CanId id, std::span<const uint8_t> data);
 
 private:
-    std::function<void()> lock_fn_ = nullptr;
-    std::function<void()> unlock_fn_ = nullptr;
-
     struct CallbackEntry {
         bool active = false;
-        CanId id = 0;
+        PUTM_CAN::CanId id = 0;
         std::function<void(std::span<const uint8_t>)> callback;
     };
 
     std::array<CallbackEntry, MAX_CALLBACKS> callbacks_;
-    std::function<void(CanId, std::span<const uint8_t>)> default_callback_;
+    CriticalSection protection_;
 
-    // RAII Lock
-    class ScopedLock {
-    public:
-        explicit ScopedLock(MessageHandler& mh) : mh_(mh) { if (mh_.lock_fn_) mh_.lock_fn_(); }
-        ~ScopedLock() { if (mh_.unlock_fn_) mh_.unlock_fn_(); }
-    private:
-        MessageHandler& mh_;
-    };
-
+    // Helper to create type-safe unpacking lambda
     template <typename MsgType>
-    static bool decode_to_message(CanId id, std::span<const uint8_t> data, MsgType& msg) {
-        // Now visible due to can_interface.hpp include
-        const auto* e = find_dbc_entry(id);
-        if (!e || data.size() != e->len) return false;
-        return e->unpack(&msg, data.data(), data.size()) >= 0;
+    auto create_unpacker(PUTM_CAN::CanId id, std::function<void(const MsgType&)> callback) {
+        return [id, callback](std::span<const uint8_t> data) {
+            const auto* e = find_dbc_entry(id);
+            if (!e) return;
+            
+            MsgType msg{};
+            using UnpackFn = int(*)(void*, const uint8_t*, size_t);
+            auto unpack_fn = reinterpret_cast<UnpackFn>(e->unpack);
+
+            if (unpack_fn(&msg, data.data(), data.size()) >= 0) {
+                callback(msg);
+            }
+        };
     }
-    
-    friend class ScopedLock;
 };
 
 } // namespace putm_ev_can
 
-#endif // PUTM_EV_CAN_MESSAGE_HANDLER_HPP
+#endif

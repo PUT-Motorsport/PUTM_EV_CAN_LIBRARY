@@ -6,30 +6,22 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 20)
 
 # =========================================================
-# --- Backend Configuration ---
+# --- 1. Backend Auto-Detection ---
 # =========================================================
-# Select backend platform (default: STM32)
-if(NOT DEFINED PUTM_CAN_BACKEND)
-    set(PUTM_CAN_BACKEND STM32)
-endif()
+set(PUTM_CAN_BACKEND STM32 CACHE STRING "Force backend to STM32" FORCE)
 
-message(STATUS "PUTM CAN LIB Backend: ${PUTM_CAN_BACKEND}")
-
-if(PUTM_CAN_BACKEND STREQUAL "STM32")
-    add_compile_definitions(PUTM_CAN_BACKEND_STM32)
-elseif(PUTM_CAN_BACKEND STREQUAL "ROS2")
-    add_compile_definitions(PUTM_CAN_BACKEND_ROS2)
-endif()
+message(STATUS "PUTM CAN LIB Backend forced to: ${PUTM_CAN_BACKEND}")
 
 # =========================================================
-# --- Python Integration & Code Generation ---
+# --- 2. Code Generation (Python) ---
 # =========================================================
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 set(CAN_GEN_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/dbc/setup.py")
 set(CAN_GEN_WORKDIR "${CMAKE_CURRENT_SOURCE_DIR}/dbc")
 
-# 1. Run generation during CONFIGURATION to ensure source files exist for CMake
+# Execute generation during the configuration phase.
+# This ensures that the .c files exist before CMake creates the file list.
 execute_process(
     COMMAND ${Python3_EXECUTABLE} "${CAN_GEN_SCRIPT}"
     WORKING_DIRECTORY "${CAN_GEN_WORKDIR}"
@@ -40,7 +32,7 @@ if(NOT GEN_RESULT EQUAL 0)
     message(FATAL_ERROR "Error: CAN code generation failed.")
 endif()
 
-# 2. Custom target to check/regenerate DBC files on every build
+# Create a custom target to re-run generation on every build if needed.
 add_custom_target(
     GenerateCanCode ALL
     COMMAND ${Python3_EXECUTABLE} "${CAN_GEN_SCRIPT}"
@@ -49,20 +41,22 @@ add_custom_target(
 )
 
 # =========================================================
-# --- Source Files Selection ---
+# --- 3. Source Selection ---
 # =========================================================
 
-# Common files (Logic, Router, Facade, Generated C)
-file(GLOB_RECURSE COMMON_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/can_interface.cpp"
+# Find generated C files from the DBC folder
+file(GLOB GENERATED_DBC_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/dbc/generated/*.c")
+
+# Define core library sources
+set(COMMON_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/can_driver.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/src/message_handler.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/app_can_lib.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/dbc/generated/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/dbc_registry.cpp"
+    ${GENERATED_DBC_SOURCES}
 )
 
-# Platform-specific HAL implementation
+# Select HAL source based on the backend
 set(HAL_SOURCES "")
-
 if(PUTM_CAN_BACKEND STREQUAL "STM32")
     list(APPEND HAL_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/can_hal_stm32.cpp")
 elseif(PUTM_CAN_BACKEND STREQUAL "ROS2")
@@ -70,42 +64,56 @@ elseif(PUTM_CAN_BACKEND STREQUAL "ROS2")
 endif()
 
 # =========================================================
-# --- Library Definition ---
+# --- 4. Library Definition ---
 # =========================================================
 
+# Create the static library
 add_library(putm_ev_can STATIC ${COMMON_SOURCES} ${HAL_SOURCES})
 
-# Ensure generation runs before compilation
+# Ensure code generation runs before the library is compiled
 add_dependencies(putm_ev_can GenerateCanCode)
 
 # =========================================================
-# --- Dependencies & Includes ---
+# --- 5. Configuration & Dependencies ---
 # =========================================================
 
-target_include_directories(putm_ev_can PUBLIC
-    include
+# Public include directories (visible to users of this library)
+target_include_directories(putm_ev_can PUBLIC 
+    include 
     dbc/generated
 )
 
 if(PUTM_CAN_BACKEND STREQUAL "STM32")
     # --- STM32 Configuration ---
-    target_link_libraries(putm_ev_can PUBLIC stm32cubemx)
     
-    # Resolve paths relative to project root (assuming CubeIDE structure)
-    get_filename_component(MAIN_H_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
+    # Define the backend macro for the code
+    target_compile_definitions(putm_ev_can PUBLIC PUTM_CAN_BACKEND_STM32)
+    
+    # Link against STM32CubeMX (assuming provided by parent project)
+    target_link_libraries(putm_ev_can PUBLIC stm32cubemx)
+
+    # Resolve paths to STM32 Drivers relative to the project root
     get_filename_component(PROJECT_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
     
     target_include_directories(putm_ev_can PUBLIC
-        "${MAIN_H_DIR}"
         "${PROJECT_ROOT_DIR}/Drivers/STM32G4xx_HAL_Driver/Inc"
-        "${PROJECT_ROOT_DIR}/Drivers/STM32G4xx_HAL_Driver/Inc/Legacy"
         "${PROJECT_ROOT_DIR}/Drivers/CMSIS/Device/ST/STM32G4xx/Include"
         "${PROJECT_ROOT_DIR}/Drivers/CMSIS/Include"
     )
 
 elseif(PUTM_CAN_BACKEND STREQUAL "ROS2")
-    # --- Linux/ROS2 Configuration ---
-    # Linux requires pthread for the RX simulation thread
+    # --- ROS 2 / Linux Configuration ---
+
+    # Define the backend macro for the code
+    target_compile_definitions(putm_ev_can PUBLIC PUTM_CAN_BACKEND_ROS2)
+
+    # Find required packages
     find_package(Threads REQUIRED)
-    target_link_libraries(putm_ev_can PRIVATE Threads::Threads)
+    find_package(rclcpp REQUIRED) # Required for logging in can_hal_ros2.cpp
+    
+    # Link dependencies
+    target_link_libraries(putm_ev_can PRIVATE 
+        Threads::Threads
+        rclcpp::rclcpp
+    )
 endif()
