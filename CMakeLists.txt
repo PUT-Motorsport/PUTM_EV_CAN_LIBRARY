@@ -8,9 +8,27 @@ set(CMAKE_CXX_STANDARD 20)
 # =========================================================
 # --- 1. Backend Auto-Detection ---
 # =========================================================
-set(PUTM_CAN_BACKEND STM32 CACHE STRING "Force backend to STM32" FORCE)
 
-message(STATUS "PUTM CAN LIB Backend forced to: ${PUTM_CAN_BACKEND}")
+# Allow manual override via -DPUTM_CAN_BACKEND=...
+if(NOT DEFINED PUTM_CAN_BACKEND)
+
+    # 1. Priority: Check for embedded toolchain (bare-metal system)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Generic")
+        message(STATUS "Auto-detect: Generic system (STM32).")
+        set(PUTM_CAN_BACKEND STM32)
+
+    # 2. Check for ROS 2 environment variables
+    elseif(DEFINED ENV{AMENT_PREFIX_PATH})
+        message(STATUS "Auto-detect: ROS 2 environment.")
+        set(PUTM_CAN_BACKEND ROS2)
+
+    # 3. Default fallback
+    else()
+        message(WARNING "Auto-detect failed. Defaulting to STM32.")
+        set(PUTM_CAN_BACKEND STM32)
+    endif()
+
+endif()
 
 # =========================================================
 # --- 2. Code Generation (Python) ---
