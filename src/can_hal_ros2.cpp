@@ -1,4 +1,4 @@
-#include "PUTM_EV_CAN_LIBRARY/include/can_hal_ros2.hpp"
+#include "can_hal_ros2.hpp"
 
 #ifdef PUTM_CAN_BACKEND_ROS2
     #include <rclcpp/rclcpp.hpp>

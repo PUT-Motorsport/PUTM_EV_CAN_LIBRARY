@@ -10,7 +10,7 @@
 #include <array>
 #include <span>
 #include "can_hal.hpp"
-#include "PUTM_EV_CAN_LIBRARY/include/utils/critical_section.hpp"
+#include "utils/critical_section.hpp"
 
 namespace putm_ev_can {
 

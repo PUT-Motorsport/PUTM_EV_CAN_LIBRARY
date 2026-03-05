@@ -101,6 +101,12 @@ target_include_directories(putm_ev_can PUBLIC
     dbc/generated
 )
 
+target_include_directories(putm_ev_can PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}  # <- tu katalog nadrzędny PUTM_EV_CAN_LIBRARY
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/dbc/generated
+)
+
 if(PUTM_CAN_BACKEND STREQUAL "STM32")
     # --- STM32 Configuration ---
     

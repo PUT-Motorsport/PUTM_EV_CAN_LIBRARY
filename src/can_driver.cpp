@@ -3,7 +3,7 @@
  * @brief Implementation of the main CAN driver logic.
  */
 
-#include "PUTM_EV_CAN_LIBRARY/include/can_driver.hpp"
+#include "can_driver.hpp"
 
 namespace putm_ev_can {
 
