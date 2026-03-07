@@ -24,7 +24,7 @@ public:
         rx_callback_ = callback;
     }
 
-    bool is_initialized() const override { return connected_; }
+    bool is_initialized() const { return connected_; }
     PUTM_CAN::BusDiagnostics get_diagnostics() const override { return diagnostics_; }
 
 private:
