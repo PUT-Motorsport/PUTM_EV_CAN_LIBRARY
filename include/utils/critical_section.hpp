@@ -10,7 +10,7 @@
 #if defined(PUTM_CAN_BACKEND_ROS2)
     #include <mutex>
 #elif defined(PUTM_CAN_BACKEND_STM32)
-    #include "PUTM_EV_CAN_LIBRARY/include/stm32_hal_selector.hpp"
+    #include "stm32_hal_selector.hpp"
 #endif
 
 namespace putm_ev_can {

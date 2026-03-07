@@ -1,4 +1,4 @@
-#include "PUTM_EV_CAN_LIBRARY/include/can_hal_stm32.hpp"
+#include "can_hal_stm32.hpp"
 
 #if defined(PUTM_USE_FDCAN)
 extern "C" void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs) {
