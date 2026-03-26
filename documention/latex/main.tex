@@ -136,20 +136,49 @@ pip install cantools==40.7.1
 
 Biblioteka jest dystrybuowana jako moduł CMake. Aby użyć jej w projekcie, należy zmodyfikować główny plik \texttt{CMakeLists.txt} projektu.
 
-\subsection{Dodawanie biblioteki do projektu}
+\subsection{Dodawanie biblioteki do projektu (CMake)}
 
-\textcolor{warningred}{\textbf{BARDZO WAŻNE:}} Zawsze używaj słowa kluczowego \texttt{PRIVATE} lub \texttt{PUBLIC} przy linkowaniu. Dodatkowo, poprawne podlinkowanie \texttt{putm\_ev\_can} gwarantuje przekazanie definicji środowiskowych (np. \texttt{-DPUTM\_CAN\_BACKEND\_STM32}). Brak poprawnego linkowania zaowocuje błędem kompilacji: \texttt{\#error "Backend not defined! Check CMake configuration."}
+Integracja biblioteki \texttt{PUTM\_EV\_CAN\_LIBRARY} wymaga precyzyjnej modyfikacji głównego pliku \texttt{CMakeLists.txt} Twojego projektu. Nawet drobne braki w tym pliku prowadzą do trudnych w diagnozie błędów kompilacji. Poniżej przedstawiono 4 obowiązkowe kroki poprawnej konfiguracji.
 
-\begin{lstlisting}[style=cmakestyle, caption=Podstawowa konfiguracja CMake]
-# 1. Dodanie podkatalogu biblioteki
-add_subdirectory(Core/Inc/PUTM_EV_CAN_LIBRARY)
+\textcolor{warningred}{\textbf{BARDZO WAŻNE:}} CMake jest niezwykle rygorystyczny w kwestii słów kluczowych określających zasięg (np. \texttt{PRIVATE}, \texttt{PUBLIC}). Należy stosować je konsekwentnie we wszystkich modyfikowanych sekcjach.
 
-# 2. Linkowanie biblioteki z twoim projektem (Zawsze uzywaj PRIVATE)
-target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
-    stm32cubemx
-    putm_ev_can
+\subsubsection{Krok 1: Dodanie podkatalogu biblioteki}
+Należy poinformować CMake, gdzie fizycznie znajdują się pliki źródłowe nowej biblioteki. Dodajemy tę instrukcję zazwyczaj pod włączeniem źródeł wygenerowanych przez CubeMX.
+
+\begin{lstlisting}[style=cmakestyle]
+# Dodanie biblioteki CAN (upewnij sie, ze sciezka jest poprawna)
+add_subdirectory(${PROJECT_SOURCE_DIR}/Components/PUTM_EV_CAN_LIBRARY)
+\end{lstlisting}
+
+\subsubsection{Krok 2: Konfiguracja ścieżek nagłówkowych (Include Directories)}
+Zewnętrzne projekty odnoszą się do plików biblioteki przy użyciu pełnej ścieżki, np. \texttt{\#include "PUTM\_EV\_CAN\_LIBRARY/include/stm32\_hal\_selector.hpp"}. Aby kompilator mógł to odnaleźć, musisz dodać do ścieżek poszukiwań \textbf{katalog nadrzędny} biblioteki (w tym przypadku folder \texttt{Components}).
+
+\textcolor{warningred}{\textbf{Częsty błąd:}} Brak tej ścieżki skutkuje błędem: \texttt{fatal error: PUTM\_EV\_CAN\_LIBRARY/...: No such file or directory}.
+\\Przykład:
+\begin{lstlisting}[style=cmakestyle]
+# Add include paths
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+    "${PROJECT_SOURCE_DIR}/Core/Inc"
+    "${PROJECT_SOURCE_DIR}/Components" # <- KATALOG NADRZĘDNY BIBLIOTEKI (WYMAGANE!)
+    "${PROJECT_SOURCE_DIR}/Components/PUTM_EV_CAN_LIBRARY/include"
+    "${PROJECT_SOURCE_DIR}/Components/PUTM_EV_CAN_LIBRARY/dbc/generated"
 )
 \end{lstlisting}
+
+\subsubsection{Krok 3: Linkowanie biblioteki}
+Kompilator musi fizycznie dołączyć skompilowany kod biblioteki (\texttt{.a} lub pliki obiektowe) do Twojego pliku wynikowego (\texttt{.elf}). Robimy to w sekcji \texttt{target\_link\_libraries}.
+
+\textcolor{warningred}{\textbf{Częsty błąd:}} Brak linkowania spowoduje błędy na samym końcu budowania (faza linkera): \texttt{undefined reference to `can\_driver'}. 
+
+\begin{lstlisting}[style=cmakestyle]
+# Add linked libraries
+target_link_libraries(${CMAKE_PROJECT_NAME} 
+    stm32cubemx
+    putm_ev_can # <- DODANIE ZBUDOWANEJ BIBLIOTEKI CAN
+)
+\end{lstlisting}
+
+\vspace{2cm}
 
 \subsection{Wybór konfiguracji (STM32 vs ROS2)}
 System CMake automatycznie próbuje wykryć środowisko (Bare-metal STM32 vs system Linux z załadowanym ROS2). Jeśli autodetekcja zawiedzie, możesz wymusić zachowanie ręcznie.
@@ -183,18 +212,59 @@ W projekcie pojazdu zdefiniowano trzy fizyczne magistrale CAN. Aby zachować sp�
 \newpage
 \section{Przygotowanie Sprzętowe (STM32CubeMX)}
 
-To najważniejszy krok przy korzystaniu z nowych mikrokontrolerów z serii STM32G4 oraz STM32H7 (posiadających peryferium \textbf{FDCAN}). 
+\textcolor{warningred}{\textbf{ZAKAZ:}} Nie zostawiaj domyślnych ustawień dla FDCAN w CubeMX. 
 
-\textcolor{warningred}{\textbf{ZAKAZ:}} Nie zostawiaj domyślnych ustawień dla FDCAN w CubeMX. FDCAN, w przeciwieństwie do starszego bxCAN (z serii F4), \textbf{wymaga ręcznej alokacji pamięci RAM dla buforów FIFO!} Jeśli tego nie zrobisz, sprzęt odrzuci każdą ramkę do wysłania bez wieszania programu (tzw. "cichy błąd").
-
-\subsection{Obowiązkowa Konfiguracja FDCAN w CubeMX}
-W zakładce FDCAN1/FDCAN2 $\rightarrow$ Parameter Settings należy ustawić:
+\subsection{Krok 1: Parameter Settings (Parametry FDCAN)}
+W zakładce FDCAN1/FDCAN2 $\rightarrow$ Parameter Settings należy bezwzględnie ustawić:
 \begin{itemize}
-    \item \textbf{Tx FIFO/Queue Mode:} \texttt{Tx FIFO operation} (Bardzo ważne!)
-    \item \textbf{Tx FIFO/Queue Elmts Nbr:} \texttt{8} (lub inna wartość $>0$. Ustawienie $0$ oznacza brak pamięci do wysyłania!).
-    \item \textbf{Rx FIFO0 Elmts Nbr:} \texttt{8} (Wymagane do odbioru z powiadomieniami).
-    \item \textbf{Auto Retransmission:} \texttt{DISABLE}. Włączenie tej funkcji może doprowadzić do zapchania magistralii.
+    \item \textbf{Tx Fifo Queue Mode:} \texttt{FIFO mode} .
+    \item \textbf{Frame Format:} \texttt{Classic Mode}
+    \item \textbf{Mode:} \texttt{Normal Mode}
+    \item \textbf{Auto Retransmission:} \texttt{Disable}. Włączenie tej funkcji może doprowadzić do zapchania magistrali.
+
+Do ustawienia poniższych wartości należy użyć skryptu znajdującego się w folderze z dokumentacją ,,\textit{setup\_STM32.py}''. Po wprowadzeniu konfiguracji zegarów skrypt zwróci wartości jakie trzeba wpisac w pola Nominal Prescaler, Nominal Time Seg1 oraz Nominal Time Seg2, aby uzyskać parametry opisane poniżej.
+
+    \item \textbf{Nominal Baud Rate} musi wynosić 1~Mb/s = 1\,000\,000~bit/s.
+    \item \textbf{Nominal Time Quantum} powinna być w okolicach 60-80.
 \end{itemize}
+
+
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{config_can1.png}
+    \caption{Zalecane ustawienia parametrów FDCAN w STM32CubeMX.}
+    \label{fig:config_can1}
+\end{figure}
+
+\subsection{Krok 2: NVIC Settings (Przerwania)}
+Aby funkcja asynchronicznego odbioru (Interrupt-Driven) dostarczana przez bibliotekę działała poprawnie, musisz aktywować odpowiednie przerwania w zakładce \textit{NVIC Settings}:
+\begin{itemize}
+    \item Zaznacz \textbf{Enabled} dla \texttt{FDCAN1 interrupt 0}.
+    \item Zaznacz \textbf{Enabled} dla \texttt{FDCAN1 interrupt 1}.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{config_can2.png}
+    \caption{Konfiguracja przerwań NVIC dla magistrali FDCAN.}
+    \label{fig:config_can2}
+\end{figure}
+
+\subsection{Krok 3: GPIO Settings (Piny układu)}
+Ostatnim krokiem jest upewnienie się, że odpowiednie piny mikrokontrolera zostały przypisane do funkcji RX i TX magistrali CAN w zakładce \textit{GPIO Settings}:
+\begin{itemize}
+    \item Przypisz sygnały \texttt{FDCAN1\_RX} oraz \texttt{FDCAN1\_TX} do właściwych pinów (np. odpowiednio \texttt{PA11} i \texttt{PA12}).
+    \item Zaleca się dodanie własnych etykiet (User Label), np. \texttt{CAN\_RX} i \texttt{CAN\_TX}, co znacznie poprawia czytelność wygenerowanego kodu.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{config_can3.png}
+    \caption{Przypisanie pinów GPIO dla FDCAN.}
+    \label{fig:config_can3}
+\end{figure}
 
 \newpage
 \section{Poprawna Inicjalizacja Oprogramowania}
@@ -239,7 +309,7 @@ void Communication_Task(void* argument) {
 \section{Wysyłanie (TX) i Odbieranie danych (RX)}
 
 \subsection{Odbieranie poprzez Callbacki (Interrupt-Driven)}
-Odbiór w nowej wersji biblioteki działa asynchronicznie.
+Odbiór w nowej wersji biblioteki działa asynchronicznie.\\
 \textcolor{warningred}{\textbf{UWAGA:}} Kod wewnątrz callbacku wykonuje się w \textbf{KONTEKŚCIE PRZERWANIA SPRZĘTOWEGO (ISR)}.
 
 \textbf{ZAKAZY wewnątrz Callbacku:}
