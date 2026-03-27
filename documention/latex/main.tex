@@ -13,8 +13,9 @@
 \usepackage{graphicx}
 \usepackage{float}
 \usepackage{titlesec}
-\usepackage{booktabs} % Do ładniejszych tabel
-\usepackage{awesomebox} % Opcjonalnie, dla ładnych ikonek ostrzeżeń, ale użyjemy standardowych komend
+\usepackage{booktabs}
+\usepackage{tcolorbox}
+\tcbuselibrary{skins}
 
 % Ustawienia strony
 \geometry{
@@ -30,6 +31,52 @@
 \definecolor{codepurple}{rgb}{0.58,0,0.82}
 \definecolor{backcolour}{rgb}{0.96,0.96,0.96}
 \definecolor{warningred}{rgb}{0.85,0.1,0.1}
+
+% Kolory dla ramek STM32 i ROS2
+\definecolor{stm32blue}{rgb}{0.0, 0.27, 0.55}
+\definecolor{stm32bglight}{rgb}{0.90, 0.95, 1.0}
+\definecolor{ros2green}{rgb}{0.0, 0.45, 0.2}
+\definecolor{ros2bglight}{rgb}{0.90, 1.0, 0.92}
+\definecolor{commonbg}{rgb}{0.97, 0.97, 0.97}
+\definecolor{commonframe}{rgb}{0.5, 0.5, 0.5}
+
+% Ramka STM32
+\newtcolorbox{stm32box}[1][]{
+  enhanced,
+  colback=stm32bglight,
+  colframe=stm32blue,
+  fonttitle=\bfseries\color{white},
+  coltitle=white,
+  colbacktitle=stm32blue,
+  attach boxed title to top left={yshift=-2mm, xshift=4mm},
+  boxed title style={sharp corners, size=small},
+  title={STM32},
+  #1
+}
+
+% Ramka ROS2
+\newtcolorbox{ros2box}[1][]{
+  enhanced,
+  colback=ros2bglight,
+  colframe=ros2green,
+  fonttitle=\bfseries\color{white},
+  coltitle=white,
+  colbacktitle=ros2green,
+  attach boxed title to top left={yshift=-2mm, xshift=4mm},
+  boxed title style={sharp corners, size=small},
+  title={ROS 2 / Linux},
+  #1
+}
+
+% Ramka wspólna
+\newtcolorbox{commonbox}[1][]{
+  enhanced,
+  colback=commonbg,
+  colframe=commonframe,
+  fonttitle=\bfseries,
+  title={Wspólne (STM32 i ROS 2)},
+  #1
+}
 
 % Styl kodu CMake
 \lstdefinestyle{cmakestyle}{
@@ -95,12 +142,20 @@
 
 \begin{abstract}
 Niniejszy dokument stanowi instrukcję obsługi biblioteki \texttt{PUTM\_EV\_CAN\_LIBRARY}. Biblioteka została zaprojektowana dla systemów wbudowanych (STM32) oraz środowiska ROS2. Główne cechy to: statyczna alokacja pamięci, obsługa wielu rodzin STM32 (F4, G4, L4, H7) dzięki warstwie abstrakcji HAL, odbiór danych oparty na przerwaniach (Interrupt-Driven). Dokument zawiera również zbiór dobrych praktyk oraz najczęstszych pułapek sprzętowo-programowych.
+
+\medskip
+\noindent\textbf{Legenda kolorów:}~
+\colorbox{stm32bglight}{\textcolor{stm32blue}{\textbf{STM32}}}~~
+\colorbox{ros2bglight}{\textcolor{ros2green}{\textbf{ROS 2 / Linux}}}~~
+\colorbox{commonbg}{\textcolor{commonframe}{\textbf{Wspólne}}}
 \end{abstract}
 
 \tableofcontents
 \newpage
 
+% ============================================================
 \section{Wymagania systemowe i zależności}
+% ============================================================
 
 Prawidłowa kompilacja i działanie biblioteki \texttt{PUTM\_EV\_CAN\_LIBRARY} wymaga zapewnienia odpowiedniego środowiska programistycznego. Poniższa tabela przedstawia minimalne wersje narzędzi oraz bibliotek wykorzystywanych w projekcie.
 
@@ -132,17 +187,21 @@ pip install cantools==40.7.1
 
 \newpage
 
+% ============================================================
 \section{Integracja i Konfiguracja w CMake}
+% ============================================================
 
 Biblioteka jest dystrybuowana jako moduł CMake. Aby użyć jej w projekcie, należy zmodyfikować główny plik \texttt{CMakeLists.txt} projektu.
 
-\subsection{Dodawanie biblioteki do projektu (CMake)}
+% ------- STM32 -------
+\begin{stm32box}
+\subsection*{Integracja w projekcie STM32}
 
 Integracja biblioteki \texttt{PUTM\_EV\_CAN\_LIBRARY} wymaga precyzyjnej modyfikacji głównego pliku \texttt{CMakeLists.txt} Twojego projektu. Nawet drobne braki w tym pliku prowadzą do trudnych w diagnozie błędów kompilacji. Poniżej przedstawiono 4 obowiązkowe kroki poprawnej konfiguracji.
 
 \textcolor{warningred}{\textbf{BARDZO WAŻNE:}} CMake jest niezwykle rygorystyczny w kwestii słów kluczowych określających zasięg (np. \texttt{PRIVATE}, \texttt{PUBLIC}). Należy stosować je konsekwentnie we wszystkich modyfikowanych sekcjach.
 
-\subsubsection{Krok 1: Dodanie podkatalogu biblioteki}
+\subsubsection*{Krok 1: Dodanie podkatalogu biblioteki}
 Należy poinformować CMake, gdzie fizycznie znajdują się pliki źródłowe nowej biblioteki. Dodajemy tę instrukcję zazwyczaj pod włączeniem źródeł wygenerowanych przez CubeMX.
 
 \begin{lstlisting}[style=cmakestyle]
@@ -150,7 +209,7 @@ Należy poinformować CMake, gdzie fizycznie znajdują się pliki źródłowe no
 add_subdirectory(${PROJECT_SOURCE_DIR}/Components/PUTM_EV_CAN_LIBRARY)
 \end{lstlisting}
 
-\subsubsection{Krok 2: Konfiguracja ścieżek nagłówkowych (Include Directories)}
+\subsubsection*{Krok 2: Konfiguracja ścieżek nagłówkowych (Include Directories)}
 Zewnętrzne projekty odnoszą się do plików biblioteki przy użyciu pełnej ścieżki, np. \texttt{\#include "PUTM\_EV\_CAN\_LIBRARY/include/stm32\_hal\_selector.hpp"}. Aby kompilator mógł to odnaleźć, musisz dodać do ścieżek poszukiwań \textbf{katalog nadrzędny} biblioteki (w tym przypadku folder \texttt{Components}).
 
 \textcolor{warningred}{\textbf{Częsty błąd:}} Brak tej ścieżki skutkuje błędem: \texttt{fatal error: PUTM\_EV\_CAN\_LIBRARY/...: No such file or directory}.
@@ -165,7 +224,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 )
 \end{lstlisting}
 
-\subsubsection{Krok 3: Linkowanie biblioteki}
+\subsubsection*{Krok 3: Linkowanie biblioteki}
 Kompilator musi fizycznie dołączyć skompilowany kod biblioteki (\texttt{.a} lub pliki obiektowe) do Twojego pliku wynikowego (\texttt{.elf}). Robimy to w sekcji \texttt{target\_link\_libraries}.
 
 \textcolor{warningred}{\textbf{Częsty błąd:}} Brak linkowania spowoduje błędy na samym końcu budowania (faza linkera): \texttt{undefined reference to `can\_driver'}. 
@@ -177,10 +236,13 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     putm_ev_can # <- DODANIE ZBUDOWANEJ BIBLIOTEKI CAN
 )
 \end{lstlisting}
+\end{stm32box}
 
-\vspace{2cm}
+\vspace{1em}
 
-\subsection{Wybór konfiguracji (STM32 vs ROS2)}
+% ------- Wspólne: wykrywanie backendu -------
+\begin{commonbox}
+\subsection*{Wybór konfiguracji (STM32 vs ROS2)}
 System CMake automatycznie próbuje wykryć środowisko (Bare-metal STM32 vs system Linux z załadowanym ROS2). Jeśli autodetekcja zawiedzie, możesz wymusić zachowanie ręcznie.
 
 \begin{lstlisting}[style=cmakestyle, caption=Wymuszanie konfiguracji w CMake]
@@ -190,9 +252,45 @@ set(PUTM_CAN_BACKEND "STM32" CACHE STRING "Select backend" FORCE)
 # Dla ROS2 / Linux:
 set(PUTM_CAN_BACKEND "ROS2" CACHE STRING "Select backend" FORCE)
 \end{lstlisting}
+\end{commonbox}
+
+\vspace{1em}
+
+% ------- ROS2 -------
+\begin{ros2box}
+\subsection*{Integracja w pakiecie ROS 2 (Linux)}
+
+Korzystanie z biblioteki w środowisku ROS 2 wymaga pewnych zmian wynikających z ekosystemu Ament.
+
+\subsubsection*{Krok 1: Wymuszenie standardu C++20}
+ROS 2 Humble domyślnie używa standardu C++17. Posiadanie nowej biblioteki opartej na nowoczesnych typach (jak \texttt{std::span}) wymusza zmianę standardu bezpośrednio pod deklaracją projektu.
+
+\begin{lstlisting}[style=cmakestyle]
+project(putm_vcl)
+set(CMAKE_CXX_STANDARD 20) # KONIECZNE DLA ROS 2
+\end{lstlisting}
+
+\subsubsection*{Krok 2: CMake dla $PUTM\_VCL$}
+Poniżej przedstawiono wzór poprawnej konfiguracji pliku \texttt{CMakeLists.txt} dla pakietu \texttt{putm\_vcl}. Docelowo krok ten powinien być już zaimplementowany w głównym repozytorium. Opis ten ma jednak kluczowe znaczenie w przypadku tworzenia nowej gałęzi (\textit{brancha}) od zera lub konieczności ponownej integracji biblioteki z węzłami ROS 2.
+
+\begin{lstlisting}[style=cmakestyle]
+set(PUTM_CAN_BACKEND "ROS2" CACHE STRING "Select backend" FORCE)
+add_subdirectory(include/PUTM_EV_CAN_LIBRARY putm_ev_can_build)
+
+# ... deklaracje targetow ROS (add_executable) ...
+
+ament_target_dependencies(can_tx_node rclcpp putm_vcl_interfaces)
+
+target_link_libraries(can_tx_node putm_ev_can)
+target_link_libraries(can_rx_node putm_ev_can)
+\end{lstlisting}
+\end{ros2box}
 
 \newpage
+
+% ============================================================
 \section{Konwencja Nomenklatury Magistral}
+% ============================================================
 
 W projekcie pojazdu zdefiniowano trzy fizyczne magistrale CAN. Aby zachować spójność w kodzie, \textbf{należy bezwzględnie} stosować poniższe nazewnictwo instancji klasy sterownika (np. \texttt{CanDriver} lub \texttt{AppCAN} zależnie od wersji wrappera).
 
@@ -209,12 +307,14 @@ W projekcie pojazdu zdefiniowano trzy fizyczne magistrale CAN. Aby zachować sp�
 \label{tab:nomenklatura}
 \end{table}
 
-\newpage
+% ============================================================
 \section{Przygotowanie Sprzętowe (STM32CubeMX)}
+% ============================================================
 
+\begin{stm32box}
 \textcolor{warningred}{\textbf{ZAKAZ:}} Nie zostawiaj domyślnych ustawień dla FDCAN w CubeMX. 
 
-\subsection{Krok 1: Parameter Settings (Parametry FDCAN)}
+\subsection*{Krok 1: Parameter Settings (Parametry FDCAN)}
 W zakładce FDCAN1/FDCAN2 $\rightarrow$ Parameter Settings należy bezwzględnie ustawić:
 \begin{itemize}
     \item \textbf{Tx Fifo Queue Mode:} \texttt{FIFO mode} .
@@ -228,17 +328,17 @@ Do ustawienia poniższych wartości należy użyć skryptu znajdującego się w 
     \item \textbf{Nominal Time Quantum} powinna być w okolicach 60-80.
 \end{itemize}
 
-
-
-
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.7\textwidth]{config_can1.png}
     \caption{Zalecane ustawienia parametrów FDCAN w STM32CubeMX.}
     \label{fig:config_can1}
 \end{figure}
+\end{stm32box}
 
-\subsection{Krok 2: NVIC Settings (Przerwania)}
+\newpage
+\begin{stm32box}
+\subsection*{Krok 2: NVIC Settings (Przerwania)}
 Aby funkcja asynchronicznego odbioru (Interrupt-Driven) dostarczana przez bibliotekę działała poprawnie, musisz aktywować odpowiednie przerwania w zakładce \textit{NVIC Settings}:
 \begin{itemize}
     \item Zaznacz \textbf{Enabled} dla \texttt{FDCAN1 interrupt 0}.
@@ -252,7 +352,7 @@ Aby funkcja asynchronicznego odbioru (Interrupt-Driven) dostarczana przez biblio
     \label{fig:config_can2}
 \end{figure}
 
-\subsection{Krok 3: GPIO Settings (Piny układu)}
+\subsection*{Krok 3: GPIO Settings (Piny układu)}
 Ostatnim krokiem jest upewnienie się, że odpowiednie piny mikrokontrolera zostały przypisane do funkcji RX i TX magistrali CAN w zakładce \textit{GPIO Settings}:
 \begin{itemize}
     \item Przypisz sygnały \texttt{FDCAN1\_RX} oraz \texttt{FDCAN1\_TX} do właściwych pinów (np. odpowiednio \texttt{PA11} i \texttt{PA12}).
@@ -265,13 +365,19 @@ Ostatnim krokiem jest upewnienie się, że odpowiednie piny mikrokontrolera zost
     \caption{Przypisanie pinów GPIO dla FDCAN.}
     \label{fig:config_can3}
 \end{figure}
+\end{stm32box}
 
-\newpage
+% ============================================================
 \section{Poprawna Inicjalizacja Oprogramowania}
+% ============================================================
 
 Biblioteka przejmuje całkowitą kontrolę nad peryferium CAN. Inicjalizuje filtry, aktywuje powiadomienia o przerwaniach i fizycznie uruchamia magistralę.
 
-\subsection{Krok 1: Instancje Globalne}
+% ------- STM32 -------
+\begin{stm32box}
+\subsection*{Inicjalizacja na STM32}
+
+\subsubsection*{Krok 1: Instancje Globalne}
 W pliku \texttt{main.cpp} (lub pliku obsługującym konkretne zadanie FreeRTOS, np. \texttt{communication\_task.cpp}) należy utworzyć obiekty dla wykorzystywanych magistral bez słowa \texttt{extern}, jeśli definicja znajduje się w tym samym pliku.
 
 \begin{lstlisting}
@@ -279,7 +385,7 @@ W pliku \texttt{main.cpp} (lub pliku obsługującym konkretne zadanie FreeRTOS, 
 putm_ev_can::CanDriver can_m; 
 \end{lstlisting}
 
-\subsection{Krok 2: Wywołanie Init() i Ciche Błędy}
+\subsubsection*{Krok 2: Wywołanie Init() i Ciche Błędy}
 \textcolor{warningred}{\textbf{ZAKAZ PODWÓJNEJ INICJALIZACJI:}} Nie wolno wywoływać funkcji \texttt{HAL\_FDCAN\_Start()} oraz \texttt{HAL\_FDCAN\_ActivateNotification()} z poziomu pliku \texttt{main.c}! 
 Biblioteka wewnątrz metody \texttt{can\_m.Init(\&hfdcan1)} sama to robi. Jeśli wywołasz Start sprzętowy przed biblioteką, funkcja \texttt{Init()} zwróci błąd (status \textit{BUSY}), flaga wewnętrzna biblioteki pozostanie w stanie \textit{uninitialized}, a funkcja \texttt{Send()} nigdy nie wyśle ramki.
 
@@ -304,11 +410,40 @@ void Communication_Task(void* argument) {
     // ...
 }
 \end{lstlisting}
+\end{stm32box}
+
+\vspace{1em}
+
+% ------- ROS2 -------
+\begin{ros2box}
+\subsection*{Inicjalizacja w ROS 2 (Linux)}
+W środowisku opartym na SocketCAN, do funkcji \texttt{Init()} przekazujemy nazwę logiczną interfejsu sieciowego (np. \texttt{"can0"}). Zazwyczaj robimy to bezpośrednio w konstruktorze węzła ROS 2.
+
+\begin{lstlisting}
+#include "can_driver.hpp"
+
+class CanRxNode : public rclcpp::Node {
+private:
+    putm_ev_can::CanDriver can_amk;
+public:
+    CanRxNode() : Node("can_rx_node") {
+        if (!can_amk.Init("can0")) {
+            RCLCPP_ERROR(this->get_logger(), "Failed to init AMK CAN interface");
+        }
+    }
+};
+\end{lstlisting}
+\end{ros2box}
 
 \newpage
-\section{Wysyłanie (TX) i Odbieranie danych (RX)}
 
-\subsection{Odbieranie poprzez Callbacki (Interrupt-Driven)}
+% ============================================================
+\section{Wysyłanie (TX) i Odbieranie danych (RX)}
+% ============================================================
+
+% ------- STM32 -------
+\begin{stm32box}
+\subsection*{Odbieranie poprzez Callbacki na STM32 (Interrupt-Driven)}
 Odbiór w nowej wersji biblioteki działa asynchronicznie.\\
 \textcolor{warningred}{\textbf{UWAGA:}} Kod wewnątrz callbacku wykonuje się w \textbf{KONTEKŚCIE PRZERWANIA SPRZĘTOWEGO (ISR)}.
 
@@ -321,7 +456,7 @@ Odbiór w nowej wersji biblioteki działa asynchronicznie.\\
 
 \textbf{Dobra Praktyka:} Zmieniaj stan zmiennych oznaczonych jako \texttt{volatile}, odświeżaj watchdoga lub używaj \texttt{osMutexAcquire(..., 0)} (czas oczekiwania $0$ dla przerwań!).
 
-\begin{lstlisting}[caption=Rejestracja callbacku i bezpieczne operacje]
+\begin{lstlisting}[caption=Rejestracja callbacku i bezpieczne operacje na STM32]
 // Rejestracja musi odbyc sie tylko raz!
 can_m.RegisterCallback<PUTM_CAN_M_front_data_t>(
     PUTM_CAN_M_FRONT_DATA_FRAME_ID, 
@@ -338,7 +473,7 @@ can_m.RegisterCallback<PUTM_CAN_M_front_data_t>(
 );
 \end{lstlisting}
 
-\subsection{Wysyłanie Danych}
+\subsection*{Wysyłanie Danych (STM32)}
 Metoda \texttt{Send} sprawdza typ i bezpiecznie umieszcza ramkę w kolejce (dlatego konfiguracja FIFO w CubeMX była tak kluczowa).
 
 \begin{lstlisting}
@@ -356,13 +491,48 @@ if (!can_m.Send(PUTM_CAN_M_REARBOX_TEMPERATURE_FRAME_ID, temp_msg)) {
     // np. zapal czerwoną diodę błędu na układzie TCA.
 }
 \end{lstlisting}
+\end{stm32box}
+
+\vspace{1em}
+
+% ------- ROS2 -------
+\begin{ros2box}
+\subsection*{Odbieranie i wysyłanie w ROS 2 (Thread Safety)}
+
+W systemie Linux implementacja SocketCAN wywołuje zarejestrowane lambdy z wewnętrznego wątku pracującego w tle (\texttt{std::thread rx\_thread\_loop}). 
+
+W przeciwieństwie do STM32, \textbf{nie jesteśmy tutaj w przerwaniu sprzętowym}. Dodatkowo, publishery w ROS 2 (\texttt{rclcpp::Publisher::publish}) \textbf{są domyślnie bezpieczne wątkowo (thread-safe)}, więc publikowanie wiadomości bezpośrednio z wnętrza callbacku CAN jest w pełni bezpieczne i wysoce zalecane.
+
+\begin{lstlisting}[caption=Przykład asynchronicznego odbioru w ROS 2]
+#include "PUTM_CAN_M.h"
+
+// Rejestracja w konstruktorze wezla
+can_common.RegisterCallback<PUTM_CAN_M_driver_input_t>(
+    PUTM_CAN_M_DRIVER_INPUT_FRAME_ID,
+    [this](const PUTM_CAN_M_driver_input_t& frame) {
+        
+        // Zbuduj wiadomosc wysokopoziomowa ROS 2
+        msg::FrontboxDriverInput ros_msg;
+        ros_msg.pedal_position = frame.pedal_position;
+        
+        // Bezpieczna publikacja bezposrednio z watku w tle
+        frontbox_driver_input_publisher->publish(ros_msg);
+    }
+);
+\end{lstlisting}
+\end{ros2box}
 
 \newpage
+
+% ============================================================
 \section{Rozwiązywanie Problemów i Znane Pułapki (FAQ)}
+% ============================================================
 
 Poniżej zestawiono najczęściej spotykane problemy, objawy oraz rozwiązania sprzętowo-programowe.
 
-\subsection{Pułapki Software'owe}
+% ------- STM32 Software -------
+\begin{stm32box}
+\subsection*{Pułapki Software'owe (STM32)}
 \begin{itemize}
     \item \textbf{Objaw:} Kod się wykonuje, ale ramki nie wychodzą na zewnątrz (\texttt{Send} zwraca błąd).
     \begin{itemize}
@@ -374,8 +544,13 @@ Poniżej zestawiono najczęściej spotykane problemy, objawy oraz rozwiązania s
         \item \textbf{Przyczyna:} Brak podlinkowania biblioteki do targetu przez \texttt{target\_link\_libraries(... PRIVATE putm\_ev\_can)}.
     \end{itemize}
 \end{itemize}
+\end{stm32box}
 
-\subsection{Pułapki Sprzętowe (Hardware)}
+\vspace{1em}
+
+% ------- Hardware -------
+\begin{stm32box}
+\subsection*{Pułapki Sprzętowe (Hardware)}
 \begin{itemize}
     \item \textbf{Objaw:} Brak sygnału na magistrali widocznego na oscyloskopie, lub jest on całkowicie niezrozumiały/zniekształcony, a debugowanie oprogramowania nie przynosi efektu.
     \begin{itemize}
@@ -386,5 +561,23 @@ Poniżej zestawiono najczęściej spotykane problemy, objawy oraz rozwiązania s
         \item \textbf{Przyczyna:} Pin \texttt{STBY} transiwera CAN nie jest ściągnięty do masy (GND). Zweryfikuj, czy odpowiednie rezystory konfiguracyjne zostały wlutowane na PCB.
     \end{itemize}
 \end{itemize}
+\end{stm32box}
+
+\vspace{1em}
+
+% ------- ROS2 Software -------
+\begin{ros2box}
+\subsection*{Pułapki Software'owe (ROS 2 / CMake / C++)}
+\begin{itemize}
+    \item \textbf{Objaw:} Kod kompiluje się z błędami \texttt{'std::span' has not been declared} lub \texttt{'concept' does not name a type} w systemie ROS 2.
+    \begin{itemize}
+        \item \textbf{Rozwiązanie:} Wymuś standard C++20 w pliku \texttt{CMakeLists.txt} zaraz po dyrektywie project: \texttt{set(CMAKE\_CXX\_STANDARD 20)}. Pakiety ROS 2 (Humble) domyślnie używają starszego C++17.
+    \end{itemize}
+    \item \textbf{Objaw:} Zmienne we własnym kodzie nie odpowiadają nazwom wygenerowanym przez generator \texttt{cantools} (błąd "has no member named...").
+    \begin{itemize}
+        \item \textbf{Rozwiązanie:} Generator w Pythonie wymusza styl \textit{snake\_case}. Sygnały zdefiniowane w pliku \texttt{.dbc} jako \texttt{AMK\_bSystemReady} zostają wygenerowane jako: \texttt{amk\_b\_system\_ready}. Zawsze weryfikuj wygląd pól w wygenerowanym pliku \texttt{.h}.
+    \end{itemize}
+\end{itemize}
+\end{ros2box}
 
 \end{document}
