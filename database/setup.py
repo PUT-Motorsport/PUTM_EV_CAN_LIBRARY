@@ -15,6 +15,8 @@ BASE_DIR = Path(__file__).resolve().parent
 # Look for CMakeLists.txt one level up
 CMAKE_FILE = BASE_DIR.parent / 'CMakeLists.txt' 
 GENERATED_DIR = BASE_DIR / 'generated'
+# Ścieżka do folderu z plikami DBC
+DBC_DIR = BASE_DIR / 'dbc'
 METADATA_FILE = BASE_DIR / 'codegen_metadata.json'
 
 def get_backend_from_cmake():
@@ -115,14 +117,11 @@ if __name__ == '__main__':
     # --- UPDATED FILE NAMES HERE ---
     # File selection based on backend
     
-    # 1. Main DBC file (Always included)
-    # Old: PUTM_CAN_1.dbc -> New: PUTM_CAN_M.dbc
-    files_to_process = [BASE_DIR / 'PUTM_CAN_M.dbc']
+    # Zmiana ścieżki bazowej dla plików DBC na DBC_DIR
+    files_to_process = [DBC_DIR / 'PUTM_CAN_M.dbc']
     
     if backend == "ROS2":
-        # 2. Powertrain/Inverter DBC file (Only for ROS2)
-        # Old: PUTM_CAN_2.dbc -> New: PUTM_CAN_PT.dbc
-        files_to_process.append(BASE_DIR / 'PUTM_CAN_PT.dbc')
+        files_to_process.append(DBC_DIR / 'PUTM_CAN_PT.dbc')
 
     for dbc_path in files_to_process:
         if not dbc_path.exists():
