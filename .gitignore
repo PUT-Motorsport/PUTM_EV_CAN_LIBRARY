@@ -1,0 +1,10 @@
+# --- Database Files ---
+# Ignore specific DBC files
+database/PUTM_CAN_M.dbc
+database/PUTM_CAN_PT.dbc
+database/PUTM_CAN_DV.dbc
+
+# --- Generated Files ---
+# Ignore all C sources and Headers in the generated folder
+database/generated/*.c
+database/generated/*.h
