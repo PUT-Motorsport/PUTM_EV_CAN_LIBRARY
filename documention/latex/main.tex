@@ -78,6 +78,20 @@
   #1
 }
 
+% W preambule, obok innych \newtcolorbox:
+\newtcolorbox{warningbox}[1][]{
+  enhanced,
+  colback=red!7,
+  colframe=warningred,
+  fonttitle=\bfseries\color{white},
+  coltitle=white,
+  colbacktitle=warningred,
+  attach boxed title to top left={yshift=-2mm, xshift=4mm},
+  boxed title style={sharp corners, size=small},
+  title={⚠ UWAGA},
+  #1
+}
+
 % Styl kodu CMake
 \lstdefinestyle{cmakestyle}{
     backgroundcolor=\color{backcolour},   
@@ -184,6 +198,41 @@ Skrypt generujący kod (\texttt{dbc/setup.py}) jest uruchamiany automatycznie pr
 \begin{lstlisting}[style=bashstyle, caption=Instalacja wymaganych bibliotek Python]
 pip install cantools==40.7.1
 \end{lstlisting}
+
+\newpage
+
+% ============================================================
+\section{Przygotowanie Plików DBC}
+% ============================================================
+
+Biblioteka generuje kod C na podstawie plików \texttt{.dbc} opisujących sygnały magistral CAN. \textbf{Pliki te są przechowywane w osobnym repozytorium i muszą zostać ręcznie skopiowane do odpowiedniego katalogu projektu przed konfiguracją CMake.}
+
+\subsection*{Krok 1: Pobranie plików DBC}
+
+Aktualne pliki \texttt{.dbc} znajdują się w dedykowanym repozytorium:
+
+\begin{center}
+\href{https://github.com/PUT-Motorsport/PUTM_EV_CAN_DBC}{\texttt{https://github.com/PUT-Motorsport/PUTM\_EV\_CAN\_DBC}}
+\end{center}
+
+\textcolor{warningred}{\textbf{WAŻNE:}} Zawsze pobieraj pliki z gałęzi \texttt{main}, z \textbf{oznaczeniem najnowszej wersji - postram się, aby to zawsze to był ostatni commit, ale proszę mieć na uwadzę sprawdzanie na jakiej aktualnie konfiguracji pracuje magistrala}. Użycie nieaktualnych plików może skutkować niezgodnością identyfikatorów ramek i nazw sygnałów z resztą systemu, lub doprowadzać do zakłamania wysłanych / odbieranych danych.
+
+\subsection*{Krok 2: Umieszczenie plików w projekcie}
+
+Pobrane pliki \texttt{.dbc} należy umieścić w katalogu \texttt{dbc/} wewnątrz biblioteki:
+
+\begin{lstlisting}[style=bashstyle, escapechar=|]
+PUTM_EV_CAN_LIBRARY/
+└── database/
+    └── dbc/          |\textcolor{codegreen}{<- TUTAJ umieszczamy pliki .dbc}|
+        └── .gitkeep  |\textcolor{codegray}{<- plik konfiguracyjny dla git}|
+\end{lstlisting}
+
+CMake automatycznie wykryje pliki \texttt{.dbc} i uruchomi skrypt generujący kod C podczas kolejnej konfiguracji projektu.
+
+\begin{warningbox}
+\textbf{Zakaz} wykonywania w tych folderach jakichkolwiek operacji push. Może to doprowadzić do zaburzenia struktury pracy na git. 
+\end{warningbox}
 
 \newpage
 
@@ -477,7 +526,7 @@ can_m.RegisterCallback<PUTM_CAN_M_front_data_t>(
 Metoda \texttt{Send} sprawdza typ i bezpiecznie umieszcza ramkę w kolejce (dlatego konfiguracja FIFO w CubeMX była tak kluczowa).
 
 \begin{lstlisting}
-// Przyklad w pętli for(;;)
+// Przyklad w petli for(;;)
 PUTM_CAN_M_rearbox_temperature_t temp_msg = {
     .mono_temperature = (uint8_t)temperature.mono,
     .coolant_temperature_in = (uint8_t)temperature.coolant_in,
@@ -486,9 +535,9 @@ PUTM_CAN_M_rearbox_temperature_t temp_msg = {
     .oil_temperature_r = (uint8_t)temperature.oil_r
 };
 
-// Dobrą praktyką jest weryfikacja czy ramka została dodana do kolejki
+// Dobra praktyka jest weryfikacja czy ramka zostala dodana do kolejki
 if (!can_m.Send(PUTM_CAN_M_REARBOX_TEMPERATURE_FRAME_ID, temp_msg)) {
-    // np. zapal czerwoną diodę błędu na układzie TCA.
+    // np. zapal czerwona diode bledu na układzie TCA.
 }
 \end{lstlisting}
 \end{stm32box}
