@@ -22,6 +22,13 @@
     #include "stm32g4xx_hal.h"
     #define PUTM_USE_FDCAN 1
 
+// --- STM32 G0 Family (FDCAN) ---
+#elif defined(STM32G0) || defined(STM32G0xx) || \
+      defined(STM32G0B1xx) || defined(STM32G0C1xx)
+    
+    #include "stm32g0xx_hal.h"
+    #define PUTM_USE_FDCAN 1
+
 // --- STM32 H7 Family (FDCAN) ---
 #elif defined(STM32H7) || defined(STM32H7xx)
     #include "stm32h7xx_hal.h"
