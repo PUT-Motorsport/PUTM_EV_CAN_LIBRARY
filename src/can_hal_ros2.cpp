@@ -19,6 +19,7 @@ namespace putm_ev_can {
 SocketCanHal::~SocketCanHal() {
     running_ = false;
     if (socket_fd_ >= 0) {
+        shutdown(socket_fd_, SHUT_RDWR);
         close(socket_fd_); 
         socket_fd_ = -1;
     }

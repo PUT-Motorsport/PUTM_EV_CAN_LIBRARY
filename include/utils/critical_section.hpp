@@ -21,6 +21,7 @@ public:
 #if defined(PUTM_CAN_BACKEND_ROS2)
         mutex_.lock();
 #elif defined(PUTM_CAN_BACKEND_STM32)
+        primask_ = __get_PRIMASK();
         __disable_irq();
 #endif
     }
@@ -29,13 +30,15 @@ public:
 #if defined(PUTM_CAN_BACKEND_ROS2)
         mutex_.unlock();
 #elif defined(PUTM_CAN_BACKEND_STM32)
-        __enable_irq();
+        __set_PRIMASK(primask_);
 #endif
     }
 
 private:
 #if defined(PUTM_CAN_BACKEND_ROS2)
     std::mutex mutex_;
+#elif defined(PUTM_CAN_BACKEND_STM32)
+    uint32_t primask_ = 0;
 #endif
 };
 

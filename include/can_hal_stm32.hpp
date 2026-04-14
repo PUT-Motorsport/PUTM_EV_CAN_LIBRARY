@@ -19,7 +19,11 @@ public:
     bool configure_filters(std::span<const PUTM_CAN::CanFilter> filters) override;
     
     PUTM_CAN::BusDiagnostics get_diagnostics() const override {
-        return diagnostics_;
+        uint32_t primask = __get_PRIMASK();
+        __disable_irq();
+        PUTM_CAN::BusDiagnostics temp = diagnostics_;
+        __set_PRIMASK(primask);
+        return temp;
     }
 
     void set_rx_callback(PUTM_CAN::RxCallback callback) override {
