@@ -8,12 +8,24 @@ set(CMAKE_CXX_STANDARD 20)
 if(NOT DEFINED PUTM_CAN_BACKEND)
     if(CMAKE_SYSTEM_NAME STREQUAL "Generic")
         set(PUTM_CAN_BACKEND STM32)
-    elseif(DEFINED ENV{AMENT_PREFIX_PATH})
+        
+    elseif("$ENV{ROS_VERSION}" STREQUAL "2" OR DEFINED ENV{AMENT_PREFIX_PATH})
         set(PUTM_CAN_BACKEND ROS2)
+        
+    elseif(COMMAND ament_package)
+        set(PUTM_CAN_BACKEND ROS2)
+        
     else()
-        set(PUTM_CAN_BACKEND STM32)
+        find_package(rclcpp QUIET)
+        if(rclcpp_FOUND)
+            set(PUTM_CAN_BACKEND ROS2)
+        else()
+            set(PUTM_CAN_BACKEND STM32) 
+        endif()
     endif()
 endif()
+
+message(STATUS "PUTM CAN LIB - Selected Backend: ${PUTM_CAN_BACKEND}")
 
 message(STATUS "Selected Backend: ${PUTM_CAN_BACKEND}")
 
