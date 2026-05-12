@@ -21,6 +21,7 @@ message(STATUS "Selected Backend: ${PUTM_CAN_BACKEND}")
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
 set(CAN_GEN_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/database/setup.py")
+set(REGISTRY_GEN_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/database/generate_registry.py")
 set(CAN_GEN_WORKDIR "${CMAKE_CURRENT_SOURCE_DIR}/database")
 set(GEN_OUTPUT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/database/generated")
 
@@ -35,18 +36,19 @@ set(GENERATED_DBC_SOURCES
 # Define the command to generate the files. 
 # The build system will only run this if the OUTPUT files are missing or the DEPENDS script changes.
 add_custom_command(
-    OUTPUT ${GENERATED_DBC_SOURCES}
+OUTPUT ${GENERATED_DBC_SOURCES} ${GENERATED_REGISTRY_SOURCE}
     COMMAND ${Python3_EXECUTABLE} "${CAN_GEN_SCRIPT}"
+    COMMAND ${Python3_EXECUTABLE} "${REGISTRY_GEN_SCRIPT}"
     WORKING_DIRECTORY "${CAN_GEN_WORKDIR}"
-    DEPENDS "${CAN_GEN_SCRIPT}"
-    COMMENT "Running CAN Database Generator (setup.py)..."
+    DEPENDS "${CAN_GEN_SCRIPT}" "${REGISTRY_GEN_SCRIPT}"
+    COMMENT "Running CAN Database and Registry Generators..."
     VERBATIM
 )
 
 # This target acts as a build-time trigger for the command above
 add_custom_target(
     GenerateCanCode ALL
-    DEPENDS ${GENERATED_DBC_SOURCES}
+    DEPENDS ${GENERATED_DBC_SOURCES} ${GENERATED_REGISTRY_SOURCE}
 )
 
 # --- Source Selection ---
