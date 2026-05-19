@@ -215,7 +215,7 @@ Aktualne pliki \texttt{.dbc} znajdują się w dedykowanym repozytorium:
 \href{https://github.com/PUT-Motorsport/PUTM_EV_CAN_DBC}{\texttt{https://github.com/PUT-Motorsport/PUTM\_EV\_CAN\_DBC}}
 \end{center}
 
-\textcolor{warningred}{\textbf{WAŻNE:}} Zawsze pobieraj pliki z gałęzi \texttt{main}, z \textbf{oznaczeniem najnowszej wersji - postram się, aby to zawsze to był ostatni commit, ale proszę mieć na uwadzę sprawdzanie na jakiej aktualnie konfiguracji pracuje magistrala}. Użycie nieaktualnych plików może skutkować niezgodnością identyfikatorów ramek i nazw sygnałów z resztą systemu, lub doprowadzać do zakłamania wysłanych / odbieranych danych.
+\textcolor{warningred}{\textbf{WAŻNE:}} Zawsze pobieraj pliki z gałęzi \textbf{soft oznaczeniem najnowszej wersji np. soft-v1.0} Postram się, aby to zawsze to był ostatni commit, ale proszę mieć na uwadzę sprawdzanie na jakiej aktualnie konfiguracji pracuje magistrala. Użycie nieaktualnych plików może skutkować niezgodnością identyfikatorów ramek i nazw sygnałów z resztą systemu, lub doprowadzać do zakłamania wysłanych / odbieranych danych.
 
 \subsection*{Krok 2: Umieszczenie plików w projekcie}
 
@@ -292,7 +292,9 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 % ------- Wspólne: wykrywanie backendu -------
 \begin{commonbox}
 \subsection*{Wybór konfiguracji (STM32 vs ROS2)}
-System CMake automatycznie próbuje wykryć środowisko (Bare-metal STM32 vs system Linux z załadowanym ROS2). Jeśli autodetekcja zawiedzie, możesz wymusić zachowanie ręcznie.
+Wybór backendu docelowego (STM32 lub ROS2) odbywa się \textbf{w pełni automatycznie} podczas generowania konfiguracji przez CMake. Skrypt automatycznie wykrywa środowisko kompilacji: wykrycie platformy bare-metal wymusza profil STM32. Z kolei obecność aktywnych zmiennych środowiskowych ekosystemu ROS 2 (np. \texttt{ROS\_VERSION} lub \texttt{AMENT\_PREFIX\_PATH}) przełącza bibliotekę w tryb ROS2 (SocketCAN/Linux).
+
+W specyficznych warunkach, gdy automatyczna detekcja nie zadziała prawidłowo (np. przy nietypowych konfiguracjach cross-toolchaina lub w odizolowanych kontenerach CI/CD), konfigurację należy \textbf{wymusić ręcznie}. Robimy to poprzez jawne ustawienie zmiennej cache \texttt{PUTM\_CAN\_BACKEND} w głównym pliku \texttt{CMakeLists.txt} swojego projektu. Wpis ten musi znaleźć się \textbf{przed} dołączeniem podkatalogu biblioteki.
 
 \begin{lstlisting}[style=cmakestyle, caption=Wymuszanie konfiguracji w CMake]
 # Dla STM32:
@@ -578,6 +580,23 @@ can_common.RegisterCallback<PUTM_CAN_M_driver_input_t>(
 % ============================================================
 
 Poniżej zestawiono najczęściej spotykane problemy, objawy oraz rozwiązania sprzętowo-programowe.
+
+
+\begin{commonbox}
+\subsection*{Błędy Generatora Kodu i Plików DBC (Wspólne)}
+\begin{itemize}
+    \item \textbf{Objaw:} Pliki nagłówkowe i źródłowe (np. \texttt{PUTM\_CAN\_M.c}, \texttt{PUTM\_CAN\_M.h}, \texttt{dbc\_registry.cpp}) nie generują się w folderach \texttt{database/generated/} oraz \texttt{src/}, a kompilator zgłasza błędy braku plików (\textit{No such file or directory}) lub linker kończy pracę błędem \textit{undefined reference}.
+    \begin{itemize}
+        \item \textbf{Przyczyna 1:} Brak plików \texttt{.dbc} w katalogu wejściowym \texttt{database/dbc/}. Jeśli ten folder jest pusty, skrypt generatora kończy wykonanie bez wygenerowania struktur C.
+        \item \textbf{Rozwiązanie:} Upewnij się, że pobrałeś pliki \texttt{.dbc} z zewnętrznego repozytorium opisanego w Sekcji 2 i ręcznie wkleiłeś je do podfolderu \texttt{database/dbc/}.
+        \item \textbf{Przyczyna 2:} Środowisko Pythona nie posiada zainstalowanej wymaganej biblioteki parsującej lub CMake wykrywa zły/nieaktualny interpreter systemowy.
+        \item \textbf{Rozwiązanie:} Wywołaj w terminalu systemowym komendę: \texttt{pip install cantools==40.7.1}. Upewnij się, że Python 3 jest dodany do zmiennej środowiskowej \texttt{PATH} Twojego systemu.
+        \item \textbf{Przyczyna 3:} Brak uruchomienia procesu budowania (Build). Skrypty generujące kod wyzwalane są automatycznie jako krok typu \textit{build-time} (podczas kompilacji), a nie podczas samej konfiguracji (fazy konfiguracyjnej) projektu w CMake.
+        \item \textbf{Rozwiązanie:} Uruchom pełne budowanie projektu w swoim IDE lub wywołaj specyficzny target odpowiedzialny za generowanie: \texttt{GenerateCanCode}. W przypadku permanentnego zablokowania generacji (np. gdy skrypt błędnie uzna pliki za aktualne), usuń cały katalog \texttt{build/}, skasuj plik bufora \texttt{database/codegen\_metadata.json} i wykonaj czystą rekonfigurację projektu (\textit{Clean Build}).
+    \end{itemize}
+\end{itemize}
+\end{commonbox}
+\vspace{1em}
 
 % ------- STM32 Software -------
 \begin{stm32box}
