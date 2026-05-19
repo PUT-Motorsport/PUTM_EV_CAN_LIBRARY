@@ -9,11 +9,11 @@ High-level abstraction layer over STM32 HAL CAN interface, simplifying CAN bus c
 ---
 
 ## 📂 Repository Structure
-├── database/       # CAN message database and signal definitions
-├── documention/    # DOCUMENTATION - Read before use!
-├── include/        # Header files (.h, .hpp)
-├── src/            # Source files (.cpp)
-└── CMakeLists.txt  # Build configuration
+├── database/       # CAN message database and signal definitions  
+├── documention/    # DOCUMENTATION - Read before use!  
+├── include/        # Header files (.h, .hpp)  
+├── src/            # Source files (.cpp)  
+└── CMakeLists.txt  # Build configuration  
 
 ---
 
@@ -49,8 +49,8 @@ The documentation contains:
 
 ## 🔗 Related Projects
 
-- [PUTM_EV_CAN_DBC]([https://github.com/PUT-Motorsport/PUTM_EV_CAN_DBC]) - CAN database
-- [PUTM_EV_TS_MASTER_CONFIGURATION]([https://github.com/PUT-Motorsport/PUTM_EV_TS_MASTER_CONFIGURATION]) - TsMaster template
+- [PUTM_EV_CAN_DBC](https://github.com/PUT-Motorsport/PUTM_EV_CAN_DBC) - CAN database
+- [PUTM_EV_TS_MASTER_CONFIGURATION](https://github.com/PUT-Motorsport/PUTM_EV_TS_MASTER_CONFIGURATION) - TsMaster template
 
 ---
 
