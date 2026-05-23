@@ -19,8 +19,55 @@ High-level abstraction layer over STM32 HAL CAN interface, simplifying CAN bus c
 
 ## 🚀 Quick Start
 
-1. Clone repository: `git clone https://github.com/PUT-Motorsport/PUTM_EV_CAN_LIBRARY.git` to /inc folder in project
-2. **Read documentation in `documention/` folder first!**
+### ➕ Scenario 1: Adding the library for the first time (as a Git submodule)
+
+1. Navigate to the `Core/Inc` folder in your project:
+```bash
+   cd <your_project>Core/Inc
+```
+
+2. Add the library as a submodule:
+```bash
+   git submodule add https://github.com/PUT-Motorsport/PUTM_EV_CAN_LIBRARY.git
+```
+
+3. Initialize and fetch the submodule contents:
+```bash
+   git submodule update --init --recursive
+```
+
+4. When cloning your project on another machine, always use:
+```bash
+   git clone --recurse-submodules <your_project_url>
+```
+   Or if already cloned without submodules:
+```bash
+   git submodule update --init --recursive
+```
+
+5. **Read the documentation in `documention/` before proceeding!**
+
+---
+
+### 🔄 Scenario 2: Library already added — updating to the latest version
+
+1. Pull the latest changes from the library remote:
+```bash
+   git submodule update --remote PUTM_EV_CAN_LIBRARY
+```
+
+2. Stage and commit the submodule pointer update in your project:
+```bash
+   git add Core/Inc/PUTM_EV_CAN_LIBRARY
+   git commit -m "chore: update PUTM_EV_CAN_LIBRARY to latest version"
+```
+
+3. If your teammates need to sync after you pushed:
+```bash
+   git submodule update --init --recursive
+```
+
+4. **Check the documentation for any breaking changes or HAL driver patching updates!**
 
 ---
 
