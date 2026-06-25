@@ -34,6 +34,11 @@
     #include "stm32h7xx_hal.h"
     #define PUTM_USE_FDCAN 1
 
+// --- STM32 U5 Family (FDCAN) ---
+#elif defined(STM32U5) || defined(STM32U5xx)
+    #include "stm32u5xx_hal.h"
+    #define PUTM_USE_FDCAN 1
+
 // --- STM32 L5 Family (FDCAN) ---
 #elif defined(STM32L5) || defined(STM32L5xx)
     #include "stm32l5xx_hal.h"
