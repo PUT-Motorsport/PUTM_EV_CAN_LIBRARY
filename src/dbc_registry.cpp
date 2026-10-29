@@ -38,6 +38,7 @@ static const DbcEntry DBC_REGISTRY[] = {
     DBC_ENTRY(PUTM_CAN_M, BMS_LV_TEMPERATURE, bms_lv_temperature),
     DBC_ENTRY(PUTM_CAN_M, DASHBOARD, dashboard),
     DBC_ENTRY(PUTM_CAN_M, DRIVER_INPUT, driver_input),
+    DBC_ENTRY(PUTM_CAN_M, EBS_DATA, ebs_data),
     DBC_ENTRY(PUTM_CAN_M, FRONT_DATA, front_data),
     DBC_ENTRY(PUTM_CAN_M, PC_LAP_TIMER_DATA, pc_lap_timer_data),
     DBC_ENTRY(PUTM_CAN_M, PC_MAIN_DATA, pc_main_data),

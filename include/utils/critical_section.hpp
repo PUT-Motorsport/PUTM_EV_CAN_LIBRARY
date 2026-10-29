@@ -36,7 +36,8 @@ public:
 
 private:
 #if defined(PUTM_CAN_BACKEND_ROS2)
-    std::mutex mutex_;
+    // recursive: a user callback may call RegisterCallback() from the RX thread
+    std::recursive_mutex mutex_;
 #elif defined(PUTM_CAN_BACKEND_STM32)
     uint32_t primask_ = 0;
 #endif
@@ -60,4 +61,4 @@ private:
 
 } // namespace putm_ev_can
 
-#endif
+#endif

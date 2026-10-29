@@ -125,38 +125,40 @@ bool Stm32CanHal::configure_filters(std::span<const PUTM_CAN::CanFilter> filters
 
 bool Stm32CanHal::receive(PUTM_CAN::CanFrame& frame) { return false; }
 
+#if defined(PUTM_USE_FDCAN)
+namespace {
+// Use HAL constants instead of raw numbers: on STM32H7 (older HAL versions)
+// FDCAN_DLC_BYTES_x are shifted left by 16 bits, on G4/H5/U5/... they are not.
+constexpr uint32_t kFdcanDlcCodes[16] = {
+    FDCAN_DLC_BYTES_0,  FDCAN_DLC_BYTES_1,  FDCAN_DLC_BYTES_2,  FDCAN_DLC_BYTES_3,
+    FDCAN_DLC_BYTES_4,  FDCAN_DLC_BYTES_5,  FDCAN_DLC_BYTES_6,  FDCAN_DLC_BYTES_7,
+    FDCAN_DLC_BYTES_8,  FDCAN_DLC_BYTES_12, FDCAN_DLC_BYTES_16, FDCAN_DLC_BYTES_20,
+    FDCAN_DLC_BYTES_24, FDCAN_DLC_BYTES_32, FDCAN_DLC_BYTES_48, FDCAN_DLC_BYTES_64
+};
+constexpr uint8_t kFdcanDlcBytes[16] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64};
+} // namespace
+#endif
+
 uint8_t Stm32CanHal::dlc_to_bytes(uint32_t dlc) {
 #if defined(PUTM_USE_FDCAN)
-    switch (dlc) {
-        case FDCAN_DLC_BYTES_0: return 0;
-        case FDCAN_DLC_BYTES_8: return 8;
-        case FDCAN_DLC_BYTES_12: return 12;
-        case FDCAN_DLC_BYTES_16: return 16;
-        case FDCAN_DLC_BYTES_20: return 20;
-        case FDCAN_DLC_BYTES_24: return 24;
-        case FDCAN_DLC_BYTES_32: return 32;
-        case FDCAN_DLC_BYTES_48: return 48;
-        case FDCAN_DLC_BYTES_64: return 64;
-        default: return (dlc <= 8) ? dlc : 8;
+    for (size_t i = 0; i < 16; ++i) {
+        if (kFdcanDlcCodes[i] == dlc) return kFdcanDlcBytes[i];
     }
+    return 8;
 #else
-    return (uint8_t)dlc;
+    return (uint8_t)((dlc <= 8) ? dlc : 8);
 #endif
 }
 
 uint32_t Stm32CanHal::bytes_to_dlc(uint8_t bytes) {
 #if defined(PUTM_USE_FDCAN)
-    if (bytes <= 8) return bytes; 
-    if (bytes <= 12) return FDCAN_DLC_BYTES_12;
-    if (bytes <= 16) return FDCAN_DLC_BYTES_16;
-    if (bytes <= 20) return FDCAN_DLC_BYTES_20;
-    if (bytes <= 24) return FDCAN_DLC_BYTES_24;
-    if (bytes <= 32) return FDCAN_DLC_BYTES_32;
-    if (bytes <= 48) return FDCAN_DLC_BYTES_48;
+    for (size_t i = 0; i < 16; ++i) {
+        if (bytes <= kFdcanDlcBytes[i]) return kFdcanDlcCodes[i];
+    }
     return FDCAN_DLC_BYTES_64;
 #else
-    return bytes;
+    return (bytes <= 8) ? bytes : 8;
 #endif
 }
 
-} // namespace putm_ev_can
+} // namespace putm_ev_can

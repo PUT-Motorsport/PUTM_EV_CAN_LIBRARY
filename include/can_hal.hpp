@@ -24,6 +24,9 @@ struct BusDiagnostics {
     uint32_t tx_errors = 0;
     uint32_t rx_errors = 0;
     uint32_t last_error_code = 0;
+    uint32_t rx_dropped = 0;      ///< Frames dropped by the OS/driver before the library saw them (ROS2: socket overflow)
+    uint32_t tx_buffer_full = 0;  ///< TX attempts that hit a full TX queue (ROS2: ENOBUFS), incl. successful retries
+    uint32_t bus_off_count = 0;   ///< Bus-off events reported by the controller
 };
 
 /**
@@ -51,6 +54,8 @@ public:
     virtual ~ICanHal() = default;
 
     virtual bool init() { return false; }
+    /** @brief Stops reception (threads, interrupts). Called before the driver is destroyed. */
+    virtual void stop() {}
     virtual bool transmit(const CanFrame& frame) { return false; }
     virtual bool receive(CanFrame& frame) { return false; }
     
@@ -62,4 +67,4 @@ public:
 
 } // namespace PUTM_CAN
 
-#endif
+#endif

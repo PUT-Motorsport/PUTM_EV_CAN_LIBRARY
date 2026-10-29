@@ -44,6 +44,22 @@ public:
 
     bool Init(InitParamType param);
 
+#if defined(PUTM_CAN_BACKEND_ROS2)
+    /**
+     * @brief Initializes the bus with explicit configuration (bitrate, FD, ...).
+     * @code
+     *   putm_ev_can::SocketCanConfig cfg;
+     *   cfg.interface = "can0";
+     *   cfg.bitrate   = 1'000'000;
+     *   can_m.Init(cfg);
+     * @endcode
+     */
+    bool Init(const SocketCanConfig& config);
+#endif
+
+    /// Stops reception. Safe to call multiple times; also called by the destructor.
+    void Stop();
+
     PUTM_CAN::BusDiagnostics GetDiagnostics() const;
 
     /**
@@ -74,7 +90,10 @@ public:
 
     /**
      * @brief Registers a RX callback.
-     * @warning Executed in INTERRUPT CONTEXT! Keep it short.
+     * @warning STM32: executed in INTERRUPT CONTEXT! Keep it short.
+     * @warning ROS2: executed in the RX thread of THIS bus. Two buses = two threads running
+     *          callbacks concurrently -> protect data shared between buses. A slow callback
+     *          delays reception of this bus (frames counted in diagnostics.rx_dropped).
      */
     template <CanMessage MsgType>
     void RegisterCallback(PUTM_CAN::CanId id, std::function<void(const MsgType&)> callback) {
@@ -82,10 +101,14 @@ public:
     }
 
 private:
-    HalType hal_;
+    bool finish_init();
+
+    // Order matters: members are destroyed in reverse order, and hal_ (RX thread)
+    // calls into handler_. The destructor stops hal_ explicitly first anyway.
     MessageHandler handler_;
+    HalType hal_;
 };
 
 } // namespace putm_ev_can
 
-#endif
+#endif

@@ -27,8 +27,6 @@ endif()
 
 message(STATUS "PUTM CAN LIB - Selected Backend: ${PUTM_CAN_BACKEND}")
 
-message(STATUS "Selected Backend: ${PUTM_CAN_BACKEND}")
-
 # --- DBC Code Generation Setup ---
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 
@@ -45,14 +43,23 @@ set(GENERATED_DBC_SOURCES
     #"${GEN_OUTPUT_DIR}/PUTM_CAN_DV.c" !!!!!!!!!!!!uncomment if there will be a dv file
 )
 
-# Define the command to generate the files. 
-# The build system will only run this if the OUTPUT files are missing or the DEPENDS script changes.
+# All DBC files - editing any of them re-runs the generator.
+# The generator itself decides (by VERSION "DDMMYYYY[_N]") whether code is regenerated.
+file(GLOB DBC_FILES CONFIGURE_DEPENDS "${CAN_GEN_WORKDIR}/dbc/*.dbc")
+
+set(GENERATED_REGISTRY_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/src/dbc_registry.cpp")
+set(CAN_GEN_STAMP "${CMAKE_CURRENT_BINARY_DIR}/putm_can_codegen.stamp")
+
+# The stamp is always touched, so the command only re-runs when a DBC or a
+# generator script changes - not on every build.
 add_custom_command(
-OUTPUT ${GENERATED_DBC_SOURCES} ${GENERATED_REGISTRY_SOURCE}
+    OUTPUT "${CAN_GEN_STAMP}"
+    BYPRODUCTS ${GENERATED_DBC_SOURCES} "${GEN_OUTPUT_DIR}/dbc_versions.h"
     COMMAND ${Python3_EXECUTABLE} "${CAN_GEN_SCRIPT}"
     COMMAND ${Python3_EXECUTABLE} "${REGISTRY_GEN_SCRIPT}"
+    COMMAND ${CMAKE_COMMAND} -E touch "${CAN_GEN_STAMP}"
     WORKING_DIRECTORY "${CAN_GEN_WORKDIR}"
-    DEPENDS "${CAN_GEN_SCRIPT}" "${REGISTRY_GEN_SCRIPT}"
+    DEPENDS "${CAN_GEN_SCRIPT}" "${REGISTRY_GEN_SCRIPT}" ${DBC_FILES}
     COMMENT "Running CAN Database and Registry Generators..."
     VERBATIM
 )
@@ -60,7 +67,7 @@ OUTPUT ${GENERATED_DBC_SOURCES} ${GENERATED_REGISTRY_SOURCE}
 # This target acts as a build-time trigger for the command above
 add_custom_target(
     GenerateCanCode ALL
-    DEPENDS ${GENERATED_DBC_SOURCES} ${GENERATED_REGISTRY_SOURCE}
+    DEPENDS "${CAN_GEN_STAMP}"
 )
 
 # --- Source Selection ---
@@ -101,7 +108,8 @@ if(PUTM_CAN_BACKEND STREQUAL "STM32")
         target_link_libraries(putm_ev_can PUBLIC stm32cubemx)
     endif()
 
-    # Generalized path detection for STM32 (G4, F4, H7, etc.)
+    # Generalized path detection for STM32 (F0..F7, G0, G4, H5, H7, H7RS, L4, L5, U3, U5, C0, N6, ...)
+    # The family itself is detected in include/stm32_hal_selector.hpp.
     get_filename_component(PROJECT_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../.." ABSOLUTE)
     
     file(GLOB HAL_INC_DIR "${PROJECT_ROOT_DIR}/Drivers/STM32*xx_HAL_Driver/Inc")
@@ -118,4 +126,4 @@ elseif(PUTM_CAN_BACKEND STREQUAL "ROS2")
     find_package(Threads REQUIRED)
     find_package(rclcpp REQUIRED)
     target_link_libraries(putm_ev_can PRIVATE Threads::Threads rclcpp::rclcpp)
-endif()
+endif()
